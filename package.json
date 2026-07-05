@@ -1,0 +1,16 @@
+{
+  "name": "trek-plugin-waterway",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "test": "vitest run",
+    "dev": "npx trek-plugin-sdk dev",
+    "pack": "npx trek-plugin-sdk pack",
+    "validate": "npx trek-plugin-sdk validate"
+  },
+  "devDependencies": {
+    "trek-plugin-sdk": "file:../trek/plugin-sdk",
+    "vitest": "^2.1.0"
+  }
+}

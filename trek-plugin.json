@@ -1,0 +1,38 @@
+{
+  "id": "waterway",
+  "name": "Waterway Route Provider",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "author": "TREK",
+  "description": "Route day-plan legs along OSM rivers, canals, and fairways via Overpass.",
+  "type": "integration",
+  "trek": ">=3.2.0 <4.0.0",
+  "nativeModules": false,
+  "permissions": [
+    "hook:route-provider",
+    "db:own",
+    "http:outbound:overpass-api.de"
+  ],
+  "egress": [
+    "overpass-api.de"
+  ],
+  "capabilities": {
+    "routeModes": [
+      {
+        "mode": "waterway",
+        "label": "Waterway",
+        "allowsOptimize": false,
+        "options": [
+          {
+            "key": "speedKmh",
+            "type": "number",
+            "label": "Speed (km/h)",
+            "min": 1,
+            "max": 30,
+            "default": 6
+          }
+        ]
+      }
+    ]
+  }
+}

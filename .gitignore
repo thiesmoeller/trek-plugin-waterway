@@ -1,0 +1,4 @@
+node_modules/
+plugin.zip
+*.sqlite
+.DS_Store
