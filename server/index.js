@@ -2,14 +2,26 @@
 
 const { definePlugin } = require('trek-plugin-sdk');
 const { routeWaterwayLeg } = require('./waterway/routing');
+const { fetchLocksForRoute } = require('./waterway/context');
 const { createOverpassClient, OVERPASS_CACHE_MIGRATION } = require('./overpass');
 
 /** @type {import('trek-plugin-sdk').PluginContext | null} */
 let ctx = null;
 
-function durationS(distanceM, modeOptions) {
-  const speedKmh = typeof modeOptions?.speedKmh === 'number' ? modeOptions.speedKmh : 6;
+function durationS(distanceM, config) {
+  const speedKmh = typeof config?.speedKmh === 'number' ? config.speedKmh : 6;
   return distanceM / ((speedKmh * 1000) / 3600);
+}
+
+function defaultLockDelayMinutes(config) {
+  return typeof config?.defaultLockDelayMinutes === 'number' ? config.defaultLockDelayMinutes : 15;
+}
+
+function appendCoords(target, coords) {
+  for (const coord of coords) {
+    const last = target[target.length - 1];
+    if (!last || last[0] !== coord[0] || last[1] !== coord[1]) target.push(coord);
+  }
 }
 
 module.exports = definePlugin({
@@ -21,24 +33,68 @@ module.exports = definePlugin({
 
   hooks: {
     routeProvider: {
-      modes() {
-        return ['waterway'];
-      },
-
-      async routeLeg(req) {
+      async getRoute(req) {
         if (!ctx) throw new Error('plugin_not_loaded');
+        if (req.profile !== 'waterway') throw new Error('unsupported_route_profile');
+        if (!Array.isArray(req.waypoints) || req.waypoints.length < 2) {
+          throw new Error('waterway_requires_two_waypoints');
+        }
+
         const overpassUrl = typeof ctx.config.overpassUrl === 'string' ? ctx.config.overpassUrl : undefined;
         const overpassClient = createOverpassClient(ctx, { overpassUrl });
-        const { coords, distanceM } = await routeWaterwayLeg(req.from, req.to, {
-          overpassClient,
-          legKey: req.legKey,
-          cache: new Map(),
-          cacheTtlMs: 0,
-        });
+
+        const coordinates = [];
+        const legs = [];
+        const viaPoints = [];
+        let distance = 0;
+        let duration = 0;
+
+        for (let i = 0; i < req.waypoints.length - 1; i++) {
+          const from = req.waypoints[i];
+          const to = req.waypoints[i + 1];
+          const { coords, distanceM } = await routeWaterwayLeg(from, to, {
+            overpassClient,
+            legKey: `${req.tripId}:${req.dayId ?? 'none'}:${req.profile}:${i}`,
+            cache: new Map(),
+            cacheTtlMs: 0,
+          });
+          let locks = [];
+          try {
+            locks = await fetchLocksForRoute(
+              { coords, distanceM },
+              overpassClient,
+              { defaultLockDelayMinutes: defaultLockDelayMinutes(ctx.config) },
+            );
+          } catch {
+            locks = [];
+          }
+          const lockDelayS = locks.reduce((sum, lock) => sum + lock.delayS, 0);
+          const legDuration = durationS(distanceM, ctx.config) + lockDelayS;
+          appendCoords(coordinates, coords);
+          legs.push({
+            distance: distanceM,
+            duration: legDuration,
+            ...(locks.length ? { note: `${locks.length} lock${locks.length === 1 ? '' : 's'}; rough delay included` } : {}),
+          });
+          for (const lock of locks) {
+            if (viaPoints.length >= 40) break;
+            viaPoints.push({
+              lat: lock.lat,
+              lng: lock.lng,
+              label: lock.name || lock.ref || 'Lock',
+              dwellSeconds: lock.delayS,
+            });
+          }
+          distance += distanceM;
+          duration += legDuration;
+        }
+
         return {
-          coords,
-          distanceM,
-          durationS: durationS(distanceM, req.modeOptions),
+          coordinates,
+          distance,
+          duration,
+          legs,
+          ...(viaPoints.length ? { viaPoints } : {}),
         };
       },
     },

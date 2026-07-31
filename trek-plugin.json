@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "apiVersion": 1,
   "author": "TREK",
-  "description": "Route day-plan legs along OSM rivers, canals, and fairways via Overpass.",
+  "description": "Route day plans along OSM rivers, canals, and fairways via Overpass with rough rowing duration estimates.",
   "type": "integration",
   "trek": ">=3.2.0 <4.0.0",
   "nativeModules": false,
@@ -13,25 +13,40 @@
     "db:own",
     "http:outbound:overpass-api.de"
   ],
+  "settings": [
+    {
+      "key": "overpassUrl",
+      "label": "Overpass URL",
+      "input_type": "text",
+      "scope": "instance",
+      "placeholder": "https://overpass-api.de/api/interpreter",
+      "hint": "Optional Overpass API interpreter endpoint. Custom hosts must also be listed in egress."
+    },
+    {
+      "key": "speedKmh",
+      "label": "Average rowing speed (km/h)",
+      "input_type": "number",
+      "scope": "instance",
+      "placeholder": "6",
+      "hint": "Used for waterway duration estimates."
+    },
+    {
+      "key": "defaultLockDelayMinutes",
+      "label": "Default lock delay (minutes)",
+      "input_type": "number",
+      "scope": "instance",
+      "placeholder": "15",
+      "hint": "Added to route duration for each detected lock."
+    }
+  ],
   "egress": [
     "overpass-api.de"
   ],
   "capabilities": {
-    "routeModes": [
+    "routeProfiles": [
       {
-        "mode": "waterway",
-        "label": "Waterway",
-        "allowsOptimize": false,
-        "options": [
-          {
-            "key": "speedKmh",
-            "type": "number",
-            "label": "Speed (km/h)",
-            "min": 1,
-            "max": 30,
-            "default": 6
-          }
-        ]
+        "id": "waterway",
+        "label": "Waterway"
       }
     ]
   }

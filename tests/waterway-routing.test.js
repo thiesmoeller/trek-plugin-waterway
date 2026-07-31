@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { routeWaterwayLeg } from '../server/waterway/routing.js';
+import { extractLocksFromOsmElements } from '../server/waterway/context.js';
 
 describe('waterway routing engine', () => {
   it('routes a mocked Overpass waterway graph', async () => {
@@ -51,5 +52,22 @@ describe('waterway routing engine', () => {
     ];
     const { edges } = buildUndirectedWaterwayEdges(elements);
     expect(edges.size).toBe(1);
+  });
+
+  it('extracts lock annotations near the routed polyline with average delay', () => {
+    const locks = extractLocksFromOsmElements(
+      [
+        { type: 'node', id: 1, lat: 52.0, lon: 13.05, tags: { waterway: 'lock_gate', name: 'A Lock' } },
+        { type: 'node', id: 2, lat: 52.2, lon: 13.05, tags: { waterway: 'lock_gate', name: 'Too Far' } },
+      ],
+      [[52.0, 13.0], [52.0, 13.1]],
+      { defaultLockDelayMinutes: 10 },
+    );
+
+    expect(locks).toHaveLength(1);
+    expect(locks[0]).toMatchObject({
+      name: 'A Lock',
+      delayS: 600,
+    });
   });
 });

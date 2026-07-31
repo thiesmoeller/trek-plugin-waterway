@@ -195,6 +195,7 @@ async function routeWaterwayLeg(from, to, options) {
     const queryFixed = `
 (
   way["waterway"~"^(river|canal|fairway|tidal_channel)$"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+  way["natural"="water"]["water"~"^(river|canal|tidal)$"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
 );
 (._;>;);
 out body;

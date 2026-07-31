@@ -15,23 +15,42 @@ const MOCK_ELEMENTS = [
   { type: 'way', id: 10, nodes: [1, 2, 3], tags: { waterway: 'river' } },
 ];
 
-const legReq = {
-  mode: 'waterway',
-  from: { lat: 52.0, lng: 13.0 },
-  to: { lat: 52.0, lng: 13.2 },
-  legKey: 'test-leg',
+const LOCK_ELEMENTS = [
+  {
+    type: 'node',
+    id: 99,
+    lat: 52.0,
+    lon: 13.1,
+    tags: { waterway: 'lock_gate', name: 'Test Lock' },
+  },
+];
+
+const routeReq = {
+  profile: 'waterway',
   tripId: 1,
-  modeOptions: { speedKmh: 6 },
+  dayId: 2,
+  waypoints: [
+    { lat: 52.0, lng: 13.0 },
+    { lat: 52.0, lng: 13.2 },
+  ],
 };
 
+function mockOverpass(routeElements = MOCK_ELEMENTS, lockElements = []) {
+  let calls = 0;
+  return vi.fn(async () => ({
+    ok: true,
+    json: async () => ({ elements: calls++ % 2 === 0 ? routeElements : lockElements }),
+  }));
+}
+
 describe('trek-plugin-waterway manifest', () => {
-  it('validates against SDK rules including routeModes', () => {
+  it('validates against SDK rules including routeProfiles', () => {
     const result = validateManifest(manifest);
     expect(result.ok).toBe(true);
     expect(result.errors).toEqual([]);
-    expect(manifest.capabilities.routeModes[0]).toMatchObject({
-      mode: 'waterway',
-      allowsOptimize: false,
+    expect(manifest.capabilities.routeProfiles[0]).toMatchObject({
+      id: 'waterway',
+      label: 'Waterway',
     });
   });
 });
@@ -42,10 +61,7 @@ describe('routeProvider hook', () => {
 
   beforeEach(async () => {
     vi.resetModules();
-    fetchMock = vi.fn(async () => ({
-      ok: true,
-      json: async () => ({ elements: MOCK_ELEMENTS }),
-    }));
+    fetchMock = mockOverpass();
     globalThis.fetch = fetchMock;
     const mod = await import('../server/index.js');
     plugin = mod.default ?? mod;
@@ -55,18 +71,34 @@ describe('routeProvider hook', () => {
     vi.unstubAllGlobals();
   });
 
-  it('exposes waterway mode', () => {
-    expect(plugin.hooks.routeProvider.modes()).toEqual(['waterway']);
-  });
-
-  it('returns coords, distanceM, and durationS from speedKmh', async () => {
+  it('returns a whole route with coordinates, distance, duration, and legs', async () => {
     const { ctx } = createHostWithDb();
     await plugin.onLoad(ctx);
 
-    const result = await plugin.hooks.routeProvider.routeLeg(legReq);
-    expect(result.coords.length).toBeGreaterThanOrEqual(2);
-    expect(result.distanceM).toBeGreaterThan(10_000);
-    expect(result.durationS).toBeCloseTo(result.distanceM / ((6 * 1000) / 3600), 1);
+    const result = await plugin.hooks.routeProvider.getRoute(routeReq);
+    expect(result.coordinates.length).toBeGreaterThanOrEqual(2);
+    expect(result.distance).toBeGreaterThan(10_000);
+    expect(result.duration).toBeCloseTo(result.distance / ((6 * 1000) / 3600), 1);
+    expect(result.legs).toHaveLength(routeReq.waypoints.length - 1);
+    expect(result.legs[0].distance).toBe(result.distance);
+  });
+
+  it('adds detected lock delay and exposes locks as route via points', async () => {
+    fetchMock = mockOverpass(MOCK_ELEMENTS, LOCK_ELEMENTS);
+    globalThis.fetch = fetchMock;
+    const { ctx } = createHostWithDb({ config: { speedKmh: 6, defaultLockDelayMinutes: 12 } });
+    await plugin.onLoad(ctx);
+
+    const result = await plugin.hooks.routeProvider.getRoute(routeReq);
+    const baseDuration = result.distance / ((6 * 1000) / 3600);
+    expect(result.duration).toBeCloseTo(baseDuration + 12 * 60, 1);
+    expect(result.legs[0].note).toContain('1 lock');
+    expect(result.viaPoints[0]).toMatchObject({
+      lat: 52.0,
+      lng: 13.1,
+      label: 'Test Lock',
+      dwellSeconds: 12 * 60,
+    });
   });
 
   it('uses configurable overpassUrl from ctx.config', async () => {
@@ -74,7 +106,7 @@ describe('routeProvider hook', () => {
     const { ctx } = createHostWithDb({ config: { overpassUrl: mirror } });
     await plugin.onLoad(ctx);
 
-    await plugin.hooks.routeProvider.routeLeg(legReq);
+    await plugin.hooks.routeProvider.getRoute(routeReq);
     expect(fetchMock).toHaveBeenCalledWith(mirror, expect.any(Object));
   });
 
@@ -82,11 +114,11 @@ describe('routeProvider hook', () => {
     const { ctx, cacheRows } = createHostWithDb();
     await plugin.onLoad(ctx);
 
-    await plugin.hooks.routeProvider.routeLeg(legReq);
-    await plugin.hooks.routeProvider.routeLeg({ ...legReq, legKey: 'other-leg' });
+    await plugin.hooks.routeProvider.getRoute(routeReq);
+    await plugin.hooks.routeProvider.getRoute({ ...routeReq, dayId: 3 });
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(cacheRows.size).toBe(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(cacheRows.size).toBe(2);
   });
 
   it('runs db migration on load', async () => {
