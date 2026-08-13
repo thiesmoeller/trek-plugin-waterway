@@ -5,8 +5,11 @@
   "apiVersion": 1,
   "author": "TREK",
   "description": "Route day plans along OSM rivers, canals, and fairways via Overpass with rough rowing duration estimates.",
+  "homepage": "https://github.com/thiesmoeller/trek-plugin-waterway",
+  "license": "MIT",
+  "icon": "Waves",
   "type": "integration",
-  "trek": ">=3.2.0 <4.0.0",
+  "trek": ">=4.0.0 <5.0.0",
   "nativeModules": false,
   "permissions": [
     "hook:route-provider",
