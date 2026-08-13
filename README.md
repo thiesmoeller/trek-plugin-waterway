@@ -49,6 +49,7 @@ cd ../trek/plugin-sdk && npm install && npm run build && cd ../../trek-plugin-wa
 
 npm test
 npm run validate
+npm run ci
 npm run dev
 ```
 
@@ -61,20 +62,36 @@ trek-plugin.json          Manifest (id: waterway, routeProfiles capability)
 server/index.js           Plugin entry — onLoad + hooks.routeProvider
 server/overpass.js        Overpass client with db-backed cache
 server/waterway/          Vendored graph/snap/pathfind engine (pure JS)
+tests/fixtures/           Deterministic OSM-like route and lock fixtures
 tests/                    Vitest suite with mocked fetch
 ```
 
 ## Testing
 
-Tests run standalone without TREK core:
+Required tests run standalone without TREK core and without live Overpass:
 
 - `tests/waterway-routing.test.js` — graph engine (ported from `@trek/waterway-routing`)
-- `tests/plugin.test.js` — manifest validation, `getRoute` contract, lock delay, db cache behaviour
+- `tests/plugin.test.js` — manifest validation, `getRoute` contract, lock delay, db cache behaviour, invalid host requests
+- `tests/overpass-client.test.js` — encoded Overpass requests, db cache hits, stale refresh, HTTP failures
+- `tests/trek-host-contract.test.js` — TREK-style discovery/enabling/invocation against deterministic OSM fixtures
+- `tests/sdk-cli.test.js` — SDK validator CLI exit contract
 - `tests/intent.test.js` — scoped check against the original rowing-planner intent for this first provider slice
 
 ```bash
 npm test
+npm run validate
+npm run pack
 ```
+
+`npm run ci` runs the required release checks in order: tests, SDK validation, and packaging.
+
+A live Overpass smoke test is available for pre-release confidence, but it is intentionally not part of required CI because OSM data, rate limits, and network availability are outside the plugin's control:
+
+```bash
+npm run test:live
+```
+
+GitHub Actions runs `npm ci` and `npm run ci`. Because the plugin uses the local SDK dependency `file:../trek/plugin-sdk`, the workflow checks out TREK as a sibling directory before installing dependencies.
 
 ## Building a release artifact
 
@@ -83,6 +100,15 @@ npm run pack
 ```
 
 Produces `plugin.zip` suitable for the TREK plugin registry.
+
+Before registry publication, add a real TREK planner screenshot under `docs/screenshots/`
+showing the Waterway route profile selected and a rendered route. Then upload `plugin.zip`
+to a GitHub release and run:
+
+```bash
+npx trek-plugin-sdk entry
+npx trek-plugin-sdk preflight --repo OWNER/REPO --tag v1.0.0
+```
 
 ## License
 

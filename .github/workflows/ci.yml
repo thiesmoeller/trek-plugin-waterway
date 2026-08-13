@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [dev, main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: waterway
+
+      - uses: actions/checkout@v4
+        with:
+          repository: mauriceboe/TREK
+          ref: dev
+          path: trek
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: waterway/package-lock.json
+
+      - name: Install dependencies
+        working-directory: waterway
+        run: npm ci
+
+      - name: Test, validate, and pack
+        working-directory: waterway
+        run: npm run ci
