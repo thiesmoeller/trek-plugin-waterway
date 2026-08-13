@@ -19,6 +19,34 @@ describe('waterway routing engine', () => {
     expect(result.distanceM).toBeGreaterThan(10_000);
   });
 
+  it('returns overlay geometry along the valid waterway path instead of an invalid shortcut', async () => {
+    const elements = [
+      { type: 'node', id: 1, lat: 52.0, lon: 13.0 },
+      { type: 'node', id: 2, lat: 52.0, lon: 13.05 },
+      { type: 'node', id: 3, lat: 52.0, lon: 13.1 },
+      { type: 'node', id: 4, lat: 52.0, lon: 13.15 },
+      { type: 'node', id: 5, lat: 52.0, lon: 13.2 },
+      { type: 'way', id: 10, nodes: [1, 2, 3], tags: { waterway: 'canal' } },
+      { type: 'way', id: 11, nodes: [3, 4, 5], tags: { waterway: 'river' } },
+      { type: 'way', id: 12, nodes: [1, 5], tags: { waterway: 'stream' } },
+    ];
+
+    const result = await routeWaterwayLeg(
+      { lat: 52.0, lng: 13.0 },
+      { lat: 52.0, lng: 13.2 },
+      { overpassClient: { fetchInterpreter: async () => ({ elements }) }, legKey: 'overlay-path' },
+    );
+
+    expect(result.coords).toEqual([
+      [52.0, 13.0],
+      [52.0, 13.05],
+      [52.0, 13.1],
+      [52.0, 13.15],
+      [52.0, 13.2],
+    ]);
+    expect(result.distanceM).toBeCloseTo(13_693, -1);
+  });
+
   it('passes AbortSignal to the Overpass client', async () => {
     const controller = new AbortController();
     const fetchInterpreter = vi.fn(async () => ({
@@ -173,6 +201,41 @@ describe('waterway routing engine', () => {
     expect(locks[0]).toMatchObject({
       name: 'A Lock',
       delayS: 600,
+    });
+  });
+
+  it('deduplicates lock annotations and keeps the richer metadata', () => {
+    const locks = extractLocksFromOsmElements(
+      [
+        { type: 'node', id: 1, lat: 52.0, lon: 13.05, tags: { waterway: 'lock_gate' } },
+        {
+          type: 'way',
+          id: 2,
+          center: { lat: 52.0, lon: 13.0505 },
+          tags: {
+            lock: 'yes',
+            lock_name: 'Richer Lock',
+            ref: 'R-1',
+            opening_hours: 'Mo-Su 08:00-18:00',
+            phone: '+49 30 123456',
+          },
+        },
+      ],
+      [[52.0, 13.0], [52.0, 13.1]],
+      { defaultLockDelayMinutes: 15 },
+    );
+
+    expect(locks).toHaveLength(1);
+    expect(locks[0]).toMatchObject({
+      osmType: 'way',
+      osmId: 2,
+      name: 'Richer Lock',
+      ref: 'R-1',
+      delayS: 900,
+      tags: {
+        opening_hours: 'Mo-Su 08:00-18:00',
+        phone: '+49 30 123456',
+      },
     });
   });
 });

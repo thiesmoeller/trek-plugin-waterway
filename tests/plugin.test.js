@@ -77,6 +77,43 @@ describe('routeProvider hook', () => {
     expect(result.legs[0].distance).toBe(result.distance);
   });
 
+  it('returns the TREK route shape used by the map overlay and sidebar', async () => {
+    fetchMock = mockOverpass(MOCK_ELEMENTS, LOCK_ELEMENTS);
+    globalThis.fetch = fetchMock;
+    const { ctx } = createHostWithDb({ config: { canoeSpeedKmh: 6, defaultLockDelayMinutes: 12 } });
+    await plugin.onLoad(ctx);
+
+    const result = await plugin.hooks.routeProvider.getRoute(routeReq);
+
+    expect(result).toEqual({
+      coordinates: expect.any(Array),
+      distance: expect.any(Number),
+      duration: expect.any(Number),
+      legs: [
+        {
+          distance: expect.any(Number),
+          duration: expect.any(Number),
+          note: expect.any(String),
+        },
+      ],
+      viaPoints: [
+        {
+          lat: expect.any(Number),
+          lng: expect.any(Number),
+          label: expect.any(String),
+          dwellSeconds: expect.any(Number),
+        },
+      ],
+    });
+    for (const coord of result.coordinates) {
+      expect(coord).toHaveLength(2);
+      expect(coord[0]).toBeGreaterThanOrEqual(-90);
+      expect(coord[0]).toBeLessThanOrEqual(90);
+      expect(coord[1]).toBeGreaterThanOrEqual(-180);
+      expect(coord[1]).toBeLessThanOrEqual(180);
+    }
+  });
+
   it('aggregates a multi-stop day into one route without duplicating connector coordinates', async () => {
     const { ctx } = createHostWithDb();
     await plugin.onLoad(ctx);
@@ -116,6 +153,25 @@ describe('routeProvider hook', () => {
     });
   });
 
+  it('adds multiple lock delays and exposes each lock as a route via point', async () => {
+    fetchMock = mockOverpass(MOCK_ELEMENTS, berlinCanalLockElements);
+    globalThis.fetch = fetchMock;
+    const { ctx } = createHostWithDb({ config: { canoeSpeedKmh: 6, defaultLockDelayMinutes: 10 } });
+    await plugin.onLoad(ctx);
+
+    const result = await plugin.hooks.routeProvider.getRoute(routeReq);
+    const baseDuration = result.distance / ((6 * 1000) / 3600);
+
+    expect(result.duration).toBeCloseTo(baseDuration + 2 * 10 * 60, 1);
+    expect(result.legs[0].note).toContain('2 locks');
+    expect(result.viaPoints).toHaveLength(2);
+    expect(result.viaPoints.map((point) => point.label)).toEqual([
+      'Fixture Lock West',
+      'Fixture Lock East',
+    ]);
+    expect(result.viaPoints.map((point) => point.dwellSeconds)).toEqual([600, 600]);
+  });
+
   it('uses profile-specific speeds', async () => {
     const { ctx } = createHostWithDb({ config: { canoeSpeedKmh: 4, kayakSpeedKmh: 7, rowingSpeedKmh: 9 } });
     await plugin.onLoad(ctx);
@@ -125,6 +181,29 @@ describe('routeProvider hook', () => {
 
     expect(kayak.duration).toBeCloseTo(kayak.distance / ((7 * 1000) / 3600), 1);
     expect(rowing.duration).toBeCloseTo(rowing.distance / ((9 * 1000) / 3600), 1);
+  });
+
+  it('keeps legacy waterway profile requests working as canoe routes', async () => {
+    const { ctx } = createHostWithDb({ config: { canoeSpeedKmh: 4, kayakSpeedKmh: 9 } });
+    await plugin.onLoad(ctx);
+
+    const result = await plugin.hooks.routeProvider.getRoute({ ...routeReq, profile: 'waterway' });
+
+    expect(result.distance).toBeGreaterThan(10_000);
+    expect(result.duration).toBeCloseTo(result.distance / ((4 * 1000) / 3600), 1);
+  });
+
+  it('surfaces route access warnings in leg notes', async () => {
+    const routeWithoutAccessPoints = MOCK_ELEMENTS.filter((el) => ![20, 21].includes(el.id));
+    fetchMock = mockOverpass(routeWithoutAccessPoints, []);
+    globalThis.fetch = fetchMock;
+    const { ctx } = createHostWithDb();
+    await plugin.onLoad(ctx);
+
+    const result = await plugin.hooks.routeProvider.getRoute(routeReq);
+
+    expect(result.legs[0].note).toContain('No mapped put-in nearby');
+    expect(result.legs[0].note).toContain('No mapped take-out nearby');
   });
 
   it('uses configurable overpassUrl from ctx.config', async () => {
