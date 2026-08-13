@@ -54,6 +54,111 @@ describe('waterway routing engine', () => {
     expect(edges.size).toBe(1);
   });
 
+  it('blocks water segments explicitly closed to canoes', async () => {
+    const elements = [
+      { type: 'node', id: 1, lat: 52.0, lon: 13.0 },
+      { type: 'node', id: 2, lat: 52.0, lon: 13.1 },
+      { type: 'way', id: 10, nodes: [1, 2], tags: { waterway: 'river', canoe: 'no' } },
+    ];
+
+    await expect(routeWaterwayLeg(
+      { lat: 52.0, lng: 13.0 },
+      { lat: 52.0, lng: 13.1 },
+      { overpassClient: { fetchInterpreter: async () => ({ elements }) }, legKey: 'canoe-no', profile: 'canoe' },
+    )).rejects.toThrow(/waterway_/);
+  });
+
+  it('honors oneway:canoe direction', async () => {
+    const elements = [
+      { type: 'node', id: 1, lat: 52.0, lon: 13.0 },
+      { type: 'node', id: 2, lat: 52.0, lon: 13.1 },
+      { type: 'way', id: 10, nodes: [1, 2], tags: { waterway: 'river', 'oneway:canoe': 'yes' } },
+    ];
+
+    await expect(routeWaterwayLeg(
+      { lat: 52.0, lng: 13.1 },
+      { lat: 52.0, lng: 13.0 },
+      { overpassClient: { fetchInterpreter: async () => ({ elements }) }, legKey: 'oneway', profile: 'canoe' },
+    )).rejects.toThrow(/waterway_/);
+  });
+
+  it('uses mapped portages for canoe routes but not rowing routes', async () => {
+    const elements = [
+      { type: 'node', id: 1, lat: 52.0, lon: 13.0 },
+      { type: 'node', id: 2, lat: 52.0, lon: 13.01 },
+      { type: 'node', id: 3, lat: 52.0, lon: 13.02 },
+      { type: 'way', id: 10, nodes: [1, 2], tags: { waterway: 'river' } },
+      { type: 'way', id: 11, nodes: [2, 3], tags: { highway: 'path', portage: 'yes' } },
+    ];
+
+    const canoe = await routeWaterwayLeg(
+      { lat: 52.0, lng: 13.0 },
+      { lat: 52.0, lng: 13.02 },
+      { overpassClient: { fetchInterpreter: async () => ({ elements }) }, legKey: 'portage-canoe', profile: 'canoe' },
+    );
+    expect(canoe.warnings.join(' ')).toContain('portage');
+
+    await expect(routeWaterwayLeg(
+      { lat: 52.0, lng: 13.0 },
+      { lat: 52.0, lng: 13.02 },
+      { overpassClient: { fetchInterpreter: async () => ({ elements }) }, legKey: 'portage-rowing', profile: 'rowing', snapMaxM: 100 },
+    )).rejects.toThrow(/waterway_/);
+  });
+
+  it('fails through hard barriers unless a canoe pass is mapped', async () => {
+    const blocked = [
+      { type: 'node', id: 1, lat: 52.0, lon: 13.0 },
+      { type: 'node', id: 2, lat: 52.0, lon: 13.05 },
+      { type: 'node', id: 3, lat: 52.0, lon: 13.1 },
+      { type: 'way', id: 10, nodes: [1, 2], tags: { waterway: 'river' } },
+      { type: 'way', id: 11, nodes: [2, 3], tags: { waterway: 'weir' } },
+    ];
+    const pass = [
+      ...blocked,
+      { type: 'way', id: 12, nodes: [2, 3], tags: { waterway: 'canoe_pass' } },
+    ];
+
+    await expect(routeWaterwayLeg(
+      { lat: 52.0, lng: 13.0 },
+      { lat: 52.0, lng: 13.1 },
+      { overpassClient: { fetchInterpreter: async () => ({ elements: blocked }) }, legKey: 'weir-blocked', profile: 'canoe' },
+    )).rejects.toThrow(/waterway_/);
+
+    const result = await routeWaterwayLeg(
+      { lat: 52.0, lng: 13.0 },
+      { lat: 52.0, lng: 13.1 },
+      { overpassClient: { fetchInterpreter: async () => ({ elements: pass }) }, legKey: 'canoe-pass', profile: 'canoe' },
+    );
+    expect(result.warnings.join(' ')).toContain('canoe pass');
+  });
+
+  it('rejects high whitewater for canoe routes and any whitewater for rowing routes', async () => {
+    const elements = (grade) => [
+      { type: 'node', id: 1, lat: 52.0, lon: 13.0 },
+      { type: 'node', id: 2, lat: 52.0, lon: 13.1 },
+      { type: 'way', id: 10, nodes: [1, 2], tags: { waterway: 'river', 'whitewater:rapid_grade': String(grade) } },
+    ];
+
+    const mild = await routeWaterwayLeg(
+      { lat: 52.0, lng: 13.0 },
+      { lat: 52.0, lng: 13.1 },
+      { overpassClient: { fetchInterpreter: async () => ({ elements: elements(1) }) }, legKey: 'mild', profile: 'canoe' },
+    );
+    expect(mild.warnings.join(' ')).toContain('whitewater grade 1');
+
+    await expect(routeWaterwayLeg(
+      { lat: 52.0, lng: 13.0 },
+      { lat: 52.0, lng: 13.1 },
+      { overpassClient: { fetchInterpreter: async () => ({ elements: elements(3) }) }, legKey: 'hard-whitewater', profile: 'canoe' },
+    )).rejects.toThrow(/waterway_/);
+
+    await expect(routeWaterwayLeg(
+      { lat: 52.0, lng: 13.0 },
+      { lat: 52.0, lng: 13.1 },
+      { overpassClient: { fetchInterpreter: async () => ({ elements: elements(1) }) }, legKey: 'rowing-whitewater', profile: 'rowing' },
+    )).rejects.toThrow(/waterway_/);
+  });
+
   it('extracts lock annotations near the routed polyline with average delay', () => {
     const locks = extractLocksFromOsmElements(
       [

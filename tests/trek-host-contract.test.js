@@ -47,7 +47,11 @@ describe('TREK host route-provider contract', () => {
     expect(feedEntry).toMatchObject({
       id: 'waterway',
       type: 'integration',
-      routeProfiles: [{ id: 'waterway', label: 'Waterway' }],
+      routeProfiles: [
+        { id: 'canoe', label: 'Canoe' },
+        { id: 'kayak', label: 'Kayak' },
+        { id: 'rowing', label: 'Rowing' },
+      ],
     });
 
     const { ctx } = createHostWithDb({
@@ -55,7 +59,7 @@ describe('TREK host route-provider contract', () => {
     });
     await plugin.onLoad(ctx);
 
-    const result = await plugin.hooks.routeProvider.getRoute(routeRequest());
+    const result = await plugin.hooks.routeProvider.getRoute(routeRequest({ profile: 'canoe' }));
 
     expect(fetchMock).toHaveBeenCalled();
     expect(result).toMatchObject({
@@ -79,5 +83,15 @@ describe('TREK host route-provider contract', () => {
       expect(leg.distance).toBeGreaterThan(0);
       expect(leg.duration).toBeGreaterThan(0);
     }
+  });
+
+  it.each(['canoe', 'kayak', 'rowing'])('routes the advertised %s profile', async (profile) => {
+    const { ctx } = createHostWithDb();
+    await plugin.onLoad(ctx);
+
+    const result = await plugin.hooks.routeProvider.getRoute(routeRequest({ profile }));
+
+    expect(result.coordinates.length).toBeGreaterThanOrEqual(2);
+    expect(result.legs).toHaveLength(2);
   });
 });

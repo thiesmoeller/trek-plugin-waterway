@@ -17,10 +17,16 @@ describe('original rowing-planner intent: first TREK plugin slice', () => {
 
     expect(manifest.id).toBe('waterway');
     expect(manifest.permissions).toContain('hook:route-provider');
-    expect(manifest.capabilities.routeProfiles).toEqual([{ id: 'waterway', label: 'Waterway' }]);
+    expect(manifest.capabilities.routeProfiles).toEqual([
+      { id: 'canoe', label: 'Canoe' },
+      { id: 'kayak', label: 'Kayak' },
+      { id: 'rowing', label: 'Rowing' },
+    ]);
     expect(manifest.settings.map((setting) => setting.key)).toEqual([
       'overpassUrl',
-      'speedKmh',
+      'canoeSpeedKmh',
+      'kayakSpeedKmh',
+      'rowingSpeedKmh',
       'defaultLockDelayMinutes',
     ]);
 

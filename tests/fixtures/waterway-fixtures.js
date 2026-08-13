@@ -1,5 +1,5 @@
 export const berlinCanalTrip = {
-  profile: 'waterway',
+  profile: 'canoe',
   tripId: 42,
   dayId: 7,
   waypoints: [
@@ -18,6 +18,8 @@ export const berlinCanalRouteElements = [
   { type: 'way', id: 10, nodes: [1, 2, 3], tags: { waterway: 'canal', name: 'Fixture Canal West' } },
   { type: 'way', id: 11, nodes: [3, 4, 5], tags: { waterway: 'river', name: 'Fixture River East' } },
   { type: 'way', id: 12, nodes: [1, 5], tags: { waterway: 'stream', name: 'Ignored Stream Shortcut' } },
+  { type: 'node', id: 20, lat: 52.0, lon: 13.0, tags: { waterway: 'access_point', canoe: 'yes', name: 'Fixture Put-in' } },
+  { type: 'node', id: 21, lat: 52.0, lon: 13.2, tags: { leisure: 'slipway', canoe: 'yes', name: 'Fixture Take-out' } },
 ];
 
 export const berlinCanalLockElements = [

@@ -35,10 +35,11 @@ describe('trek-plugin-waterway manifest', () => {
     expect(result.ok).toBe(true);
     expect(result.errors).toEqual([]);
     expect(manifest.trek).toBe('>=4.0.0 <5.0.0');
-    expect(manifest.capabilities.routeProfiles[0]).toMatchObject({
-      id: 'waterway',
-      label: 'Waterway',
-    });
+    expect(manifest.capabilities.routeProfiles).toEqual([
+      { id: 'canoe', label: 'Canoe' },
+      { id: 'kayak', label: 'Kayak' },
+      { id: 'rowing', label: 'Rowing' },
+    ]);
   });
 
   it('targets TREK 4.x hosts and does not claim compatibility with old stable or TREK 5', () => {
@@ -71,7 +72,7 @@ describe('routeProvider hook', () => {
     const result = await plugin.hooks.routeProvider.getRoute(routeReq);
     expect(result.coordinates.length).toBeGreaterThanOrEqual(2);
     expect(result.distance).toBeGreaterThan(10_000);
-    expect(result.duration).toBeCloseTo(result.distance / ((6 * 1000) / 3600), 1);
+    expect(result.duration).toBeCloseTo(result.distance / ((5 * 1000) / 3600), 1);
     expect(result.legs).toHaveLength(routeReq.waypoints.length - 1);
     expect(result.legs[0].distance).toBe(result.distance);
   });
@@ -100,7 +101,7 @@ describe('routeProvider hook', () => {
   it('adds detected lock delay and exposes locks as route via points', async () => {
     fetchMock = mockOverpass(MOCK_ELEMENTS, LOCK_ELEMENTS);
     globalThis.fetch = fetchMock;
-    const { ctx } = createHostWithDb({ config: { speedKmh: 6, defaultLockDelayMinutes: 12 } });
+    const { ctx } = createHostWithDb({ config: { canoeSpeedKmh: 6, defaultLockDelayMinutes: 12 } });
     await plugin.onLoad(ctx);
 
     const result = await plugin.hooks.routeProvider.getRoute(routeReq);
@@ -113,6 +114,17 @@ describe('routeProvider hook', () => {
       label: 'Fixture Lock West',
       dwellSeconds: 12 * 60,
     });
+  });
+
+  it('uses profile-specific speeds', async () => {
+    const { ctx } = createHostWithDb({ config: { canoeSpeedKmh: 4, kayakSpeedKmh: 7, rowingSpeedKmh: 9 } });
+    await plugin.onLoad(ctx);
+
+    const kayak = await plugin.hooks.routeProvider.getRoute({ ...routeReq, profile: 'kayak' });
+    const rowing = await plugin.hooks.routeProvider.getRoute({ ...routeReq, profile: 'rowing' });
+
+    expect(kayak.duration).toBeCloseTo(kayak.distance / ((7 * 1000) / 3600), 1);
+    expect(rowing.duration).toBeCloseTo(rowing.distance / ((9 * 1000) / 3600), 1);
   });
 
   it('uses configurable overpassUrl from ctx.config', async () => {
