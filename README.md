@@ -16,6 +16,10 @@ Integration plugin for TREK that registers **canoe**, **kayak**, and **rowing** 
 
 This provider is a route-estimation aid, not an authoritative navigation product. It deliberately does not yet do tidal context, current modelling, official notices, water levels, portage instructions, or multi-section trip-template creation.
 
+## Screenshots
+
+![Waterway route provider profile overview](./docs/screenshot.png)
+
 ## Permissions
 
 | Permission | Why |
@@ -24,7 +28,7 @@ This provider is a route-estimation aid, not an authoritative navigation product
 | `db:own` | Persists Overpass cache between requests and restarts |
 | `http:outbound:overpass-api.de` | Fetches waterway data from Overpass |
 
-## Instance configuration
+## Setup
 
 Set optional instance config in Admin -> Plugins -> Waterway:
 

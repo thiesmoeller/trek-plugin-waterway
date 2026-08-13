@@ -25,7 +25,15 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: waterway/package-lock.json
+          cache-dependency-path: |
+            trek/plugin-sdk/package-lock.json
+            waterway/package-lock.json
+
+      - name: Build TREK plugin SDK
+        working-directory: trek/plugin-sdk
+        run: |
+          npm ci
+          npm run build
 
       - name: Install dependencies
         working-directory: waterway
