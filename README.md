@@ -143,11 +143,13 @@ npm run pack
 
 Produces `plugin.zip` suitable for the TREK plugin registry.
 
-The registry store card reads `docs/screenshot.png` at the pinned commit.
-Regenerate the 1600×900 marketing overview with
-`python3 scripts/render-screenshot.py`; a separate live TREK planner capture
-can be used in release notes. Then upload `plugin.zip` to a GitHub release and
-run:
+The registry store card reads `docs/screenshot.png` at the pinned commit. The
+committed 1600×900 image is a browser capture from TREK 4.2 with this plugin
+dev-linked and active. It shows Day 5 of the Merzig–Koblenz plan using the
+Rowing profile, real OSM waterway geometry, route times, distances, and lock
+markers. See `docs/screenshots/README.md` for the capture checklist.
+
+Then upload `plugin.zip` to a GitHub release and run:
 
 ```bash
 npx trek-plugin-sdk entry
