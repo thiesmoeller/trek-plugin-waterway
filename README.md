@@ -81,7 +81,14 @@ The profiles share the same route-provider contract but apply different suitabil
 
 TREK calls `getRoute({ tripId, dayId, profile, waypoints }, ctx)` with a 20 s timeout. A throw or timeout falls back to straight lines, the same as an OSRM outage. The plugin aborts its own Overpass work at 18 s and asks Overpass to finish each query within 12 s.
 
-See [docs/examples/mettlach-koblenz.md](docs/examples/mettlach-koblenz.md) for a DRV Gewaesserkatalog-based planning sketch. That document demonstrates how official rowing-waterway data can guide trip planning, but the current plugin does not import predefined trips or create TREK day plans automatically.
+See the [Merzig to Koblenz 10-day test plan](docs/examples/merzig-koblenz.md)
+for a machine-tested, DRV Gewässerkatalog-based route along the Saar and
+Mosel. It targets roughly 25 km/day, visits eleven rowing facilities, and uses
+public landings where club spacing makes 25–30 km club-to-club stages
+impossible. The earlier
+[Mettlach planning sketch](docs/examples/mettlach-koblenz.md) remains as a
+shorter human-readable example. The plugin validates and estimates the day
+routes; it does not yet create the TREK trip automatically.
 
 ## Project layout
 
@@ -104,6 +111,7 @@ Required tests run standalone without TREK core and without live Overpass:
 - `tests/overpass-client.test.js` — encoded Overpass requests, db cache hits, stale refresh, HTTP failures
 - `tests/trek-host-contract.test.js` — TREK-style discovery/enabling/invocation against deterministic OSM fixtures
 - `tests/trek-route.test.js` — duration labels and TREK vertex/note budgets
+- `tests/merzig-koblenz-trip.test.js` — ten connected rowing days from Merzig to Koblenz, club visits, stage chainage, and map/time output
 - `tests/sdk-cli.test.js` — SDK validator CLI exit contract
 - `tests/intent.test.js` — scoped check against the original rowing-planner intent for this first provider slice
 
