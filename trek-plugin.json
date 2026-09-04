@@ -1,7 +1,7 @@
 {
   "id": "waterway",
   "name": "Waterway Route Provider",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "apiVersion": 1,
   "author": "TREK",
   "description": "Route day plans along OSM rivers, canals, and fairways via Overpass with rough paddle and rowing duration estimates.",
@@ -31,6 +31,7 @@
       "input_type": "number",
       "scope": "instance",
       "placeholder": "5",
+      "default": 5,
       "hint": "Used for canoe duration estimates."
     },
     {
@@ -39,6 +40,7 @@
       "input_type": "number",
       "scope": "instance",
       "placeholder": "6",
+      "default": 6,
       "hint": "Used for kayak duration estimates."
     },
     {
@@ -47,6 +49,7 @@
       "input_type": "number",
       "scope": "instance",
       "placeholder": "8",
+      "default": 8,
       "hint": "Used for rowing duration estimates."
     },
     {
@@ -55,7 +58,16 @@
       "input_type": "number",
       "scope": "instance",
       "placeholder": "15",
+      "default": 15,
       "hint": "Added to route duration for each detected lock."
+    }
+  ],
+  "actions": [
+    {
+      "key": "purgeCache",
+      "label": "Purge Overpass cache",
+      "hint": "Drop cached waterway queries so the next route fetches fresh OSM data.",
+      "scope": "instance"
     }
   ],
   "egress": [
@@ -65,15 +77,18 @@
     "routeProfiles": [
       {
         "id": "canoe",
-        "label": "Canoe"
+        "label": "Canoe",
+        "icon": "Waves"
       },
       {
         "id": "kayak",
-        "label": "Kayak"
+        "label": "Kayak",
+        "icon": "Sailboat"
       },
       {
         "id": "rowing",
-        "label": "Rowing"
+        "label": "Rowing",
+        "icon": "Ship"
       }
     ]
   }

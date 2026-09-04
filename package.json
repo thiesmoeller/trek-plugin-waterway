@@ -1,12 +1,12 @@
 {
   "name": "trek-plugin-waterway",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "type": "commonjs",
   "scripts": {
     "ci": "npm test && npm run validate && npm run pack",
     "test": "vitest run",
-    "test:live": "WATERWAY_LIVE_OVERPASS=1 vitest run tests/live-overpass-smoke.test.js",
+    "test:live": "WATERWAY_LIVE_OVERPASS=1 vitest run tests/live-*.test.js",
     "dev": "npx trek-plugin-sdk dev",
     "pack": "npx trek-plugin-sdk pack",
     "validate": "npx trek-plugin-sdk validate"

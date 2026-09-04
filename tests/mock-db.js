@@ -30,6 +30,11 @@ function createHostWithDb(opts = {}) {
       cacheRows.set(params[0], { elements_json: params[1], fetched_at: params[2] });
       return { changes: 1 };
     }
+    if (sql.includes('DELETE FROM overpass_cache')) {
+      const n = cacheRows.size;
+      cacheRows.clear();
+      return { changes: n };
+    }
     return { changes: 0 };
   };
 

@@ -321,6 +321,7 @@ async function routeWaterwayLeg(from, to, options) {
     cache.set(cacheKey, hit);
     elements = hit.elements;
   } else {
+    const overpassTimeoutS = options.overpassTimeoutS ?? 12;
     const queryFixed = `
 (
   way["waterway"~"^(river|canal|fairway|tidal_channel)$"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
@@ -330,11 +331,17 @@ async function routeWaterwayLeg(from, to, options) {
   node["waterway"="access_point"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
   node["leisure"="slipway"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
   node["canoe"~"^(put_in|egress|yes|designated|permissive)$"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+  node["waterway"="lock_gate"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+  way["waterway"="lock_gate"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+  node["lock"="yes"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+  way["lock"="yes"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+  node["water"="lock"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
+  way["water"="lock"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});
 );
 (._;>;);
-out body;
+out body center;
 `;
-    const data = await options.overpassClient.fetchInterpreter(queryFixed.trim(), 35, { signal: options.signal });
+    const data = await options.overpassClient.fetchInterpreter(queryFixed.trim(), overpassTimeoutS, { signal: options.signal });
     if (!data?.elements?.length) throw new Error('waterway_no_data');
     elements = data.elements;
     cache.set(cacheKey, { at: now, elements });
@@ -375,7 +382,7 @@ out body;
   if (!nearAccessPoint(base.accessPoints, from)) meta.warnings.push('No mapped put-in nearby');
   if (!nearAccessPoint(base.accessPoints, to)) meta.warnings.push('No mapped take-out nearby');
 
-  return { coords, distanceM, warnings: meta.warnings, viaPoints: meta.viaPoints };
+  return { coords, distanceM, warnings: meta.warnings, viaPoints: meta.viaPoints, elements };
 }
 
 module.exports = {

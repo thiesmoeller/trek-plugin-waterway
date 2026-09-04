@@ -17,7 +17,7 @@ jobs:
 
       - uses: actions/checkout@v4
         with:
-          repository: mauriceboe/TREK
+          repository: liketrek/TREK
           ref: dev
           path: trek
 
