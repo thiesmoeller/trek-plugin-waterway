@@ -36,9 +36,17 @@ describe('trek-plugin-waterway manifest', () => {
     expect(result.errors).toEqual([]);
     expect(manifest.trek).toBe('>=4.0.0 <5.0.0');
     expect(manifest.capabilities.routeProfiles).toEqual([
-      { id: 'canoe', label: 'Canoe' },
-      { id: 'kayak', label: 'Kayak' },
-      { id: 'rowing', label: 'Rowing' },
+      { id: 'canoe', label: 'Canoe', icon: 'Waves' },
+      { id: 'kayak', label: 'Kayak', icon: 'Sailboat' },
+      { id: 'rowing', label: 'Rowing', icon: 'Ship' },
+    ]);
+    expect(manifest.actions).toEqual([
+      {
+        key: 'purgeCache',
+        label: 'Purge Overpass cache',
+        hint: 'Drop cached waterway queries so the next route fetches fresh OSM data.',
+        scope: 'instance',
+      },
     ]);
   });
 
@@ -96,14 +104,21 @@ describe('routeProvider hook', () => {
           note: expect.any(String),
         },
       ],
-      viaPoints: [
+      viaPoints: expect.arrayContaining([
         {
           lat: expect.any(Number),
           lng: expect.any(Number),
           label: expect.any(String),
+          tone: 'success',
+        },
+        {
+          lat: expect.any(Number),
+          lng: expect.any(Number),
+          label: expect.any(String),
+          tone: 'warn',
           dwellSeconds: expect.any(Number),
         },
-      ],
+      ]),
     });
     for (const coord of result.coordinates) {
       expect(coord).toHaveLength(2);
@@ -145,10 +160,14 @@ describe('routeProvider hook', () => {
     const baseDuration = result.distance / ((6 * 1000) / 3600);
     expect(result.duration).toBeCloseTo(baseDuration + 12 * 60, 1);
     expect(result.legs[0].note).toContain('1 lock');
-    expect(result.viaPoints[0]).toMatchObject({
+    expect(result.viaPoints.find((point) => point.tone === 'success')).toMatchObject({
+      label: expect.stringMatching(/min/),
+    });
+    expect(result.viaPoints.find((point) => point.dwellSeconds != null)).toMatchObject({
       lat: 52.0,
       lng: 13.05,
       label: 'Fixture Lock West',
+      tone: 'warn',
       dwellSeconds: 12 * 60,
     });
   });
@@ -164,12 +183,13 @@ describe('routeProvider hook', () => {
 
     expect(result.duration).toBeCloseTo(baseDuration + 2 * 10 * 60, 1);
     expect(result.legs[0].note).toContain('2 locks');
-    expect(result.viaPoints).toHaveLength(2);
-    expect(result.viaPoints.map((point) => point.label)).toEqual([
+    const lockVias = result.viaPoints.filter((point) => point.dwellSeconds != null);
+    expect(lockVias).toHaveLength(2);
+    expect(lockVias.map((point) => point.label)).toEqual([
       'Fixture Lock West',
       'Fixture Lock East',
     ]);
-    expect(result.viaPoints.map((point) => point.dwellSeconds)).toEqual([600, 600]);
+    expect(lockVias.map((point) => point.dwellSeconds)).toEqual([600, 600]);
   });
 
   it('uses profile-specific speeds', async () => {
@@ -215,14 +235,8 @@ describe('routeProvider hook', () => {
     expect(fetchMock).toHaveBeenCalledWith(mirror, expect.any(Object));
   });
 
-  it('keeps the route usable when lock context lookup fails', async () => {
-    let calls = 0;
-    fetchMock = vi.fn(async () => {
-      if (calls++ === 0) {
-        return { ok: true, json: async () => ({ elements: MOCK_ELEMENTS }) };
-      }
-      return { ok: false, status: 500, json: async () => ({ elements: [] }) };
-    });
+  it('keeps the route usable when OSM has no lock tags', async () => {
+    fetchMock = mockOverpass(MOCK_ELEMENTS, []);
     globalThis.fetch = fetchMock;
     const { ctx } = createHostWithDb();
     await plugin.onLoad(ctx);
@@ -230,7 +244,7 @@ describe('routeProvider hook', () => {
     const result = await plugin.hooks.routeProvider.getRoute(routeReq);
 
     expect(result.coordinates.length).toBeGreaterThanOrEqual(2);
-    expect(result.viaPoints).toBeUndefined();
+    expect(result.viaPoints.every((point) => point.dwellSeconds == null)).toBe(true);
     expect(result.legs[0].note).toBeUndefined();
   });
 
@@ -241,8 +255,8 @@ describe('routeProvider hook', () => {
     await plugin.hooks.routeProvider.getRoute(routeReq);
     await plugin.hooks.routeProvider.getRoute({ ...routeReq, dayId: 3 });
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(cacheRows.size).toBe(2);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(cacheRows.size).toBe(1);
   });
 
   it('runs db migration on load', async () => {
@@ -272,5 +286,43 @@ describe('routeProvider hook', () => {
   it('fails clearly when TREK calls the hook before onLoad', async () => {
     await expect(plugin.hooks.routeProvider.getRoute(routeReq)).rejects.toThrow('plugin_not_loaded');
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('reads speeds from the per-request TREK ctx passed to getRoute', async () => {
+    const { ctx: loaded } = createHostWithDb({ config: { canoeSpeedKmh: 4 } });
+    await plugin.onLoad(loaded);
+    const { ctx: hooked } = createHostWithDb({ config: { canoeSpeedKmh: 9 } });
+
+    const result = await plugin.hooks.routeProvider.getRoute(routeReq, hooked);
+
+    expect(result.duration).toBeCloseTo(result.distance / ((9 * 1000) / 3600), 1);
+  });
+
+  it('places a duration via point on the waterway so TREK can show time on the map', async () => {
+    const { ctx } = createHostWithDb({ config: { canoeSpeedKmh: 6 } });
+    await plugin.onLoad(ctx);
+
+    const result = await plugin.hooks.routeProvider.getRoute(routeReq);
+    const timeVia = result.viaPoints.find((point) => point.tone === 'success');
+
+    expect(timeVia).toMatchObject({
+      lat: 52.0,
+      lng: expect.any(Number),
+      label: expect.stringMatching(/min · .+ km/),
+      tone: 'success',
+    });
+    expect(timeVia.dwellSeconds).toBeUndefined();
+    expect(result.legs[0].duration).toBeGreaterThan(0);
+  });
+
+  it('purges the Overpass cache from the instance action TREK 4.2 settings dialog', async () => {
+    const { ctx, cacheRows } = createHostWithDb();
+    await plugin.onLoad(ctx);
+    await plugin.hooks.routeProvider.getRoute(routeReq);
+    expect(cacheRows.size).toBe(1);
+
+    const result = await plugin.actions.purgeCache(ctx);
+    expect(result).toEqual({ ok: true, message: 'Overpass cache cleared' });
+    expect(cacheRows.size).toBe(0);
   });
 });

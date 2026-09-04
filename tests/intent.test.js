@@ -18,9 +18,9 @@ describe('original rowing-planner intent: first TREK plugin slice', () => {
     expect(manifest.id).toBe('waterway');
     expect(manifest.permissions).toContain('hook:route-provider');
     expect(manifest.capabilities.routeProfiles).toEqual([
-      { id: 'canoe', label: 'Canoe' },
-      { id: 'kayak', label: 'Kayak' },
-      { id: 'rowing', label: 'Rowing' },
+      { id: 'canoe', label: 'Canoe', icon: 'Waves' },
+      { id: 'kayak', label: 'Kayak', icon: 'Sailboat' },
+      { id: 'rowing', label: 'Rowing', icon: 'Ship' },
     ]);
     expect(manifest.settings.map((setting) => setting.key)).toEqual([
       'overpassUrl',
@@ -30,10 +30,12 @@ describe('original rowing-planner intent: first TREK plugin slice', () => {
       'defaultLockDelayMinutes',
     ]);
 
-    expect(server).toContain('getRoute(req)');
-    expect(server).toContain('fetchLocksForRoute');
+    expect(server).toContain('getRoute(req, hookCtx)');
+    expect(server).toContain('durationViaPoint');
+    expect(server).toContain('extractLocksFromOsmElements');
     expect(server).toContain('defaultLockDelayMinutes');
     expect(routing).toContain('way["waterway"~"^(river|canal|fairway|tidal_channel)$"]');
+    expect(routing).toContain('node["waterway"="lock_gate"]');
     expect(context).toContain("waterway === 'lock_gate'");
     expect(context).toContain("lock === 'yes'");
   });

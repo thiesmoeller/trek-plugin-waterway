@@ -57,9 +57,8 @@ export function routeRequest(overrides = {}) {
 }
 
 export function overpassSequence(routeElements = berlinCanalRouteElements, lockElements = []) {
-  let calls = 0;
   return async () => ({
     ok: true,
-    json: async () => ({ elements: calls++ % 2 === 0 ? routeElements : lockElements }),
+    json: async () => ({ elements: [...routeElements, ...lockElements] }),
   });
 }

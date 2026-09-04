@@ -65,9 +65,10 @@ describe('waterway routing engine', () => {
 
     expect(fetchInterpreter).toHaveBeenCalledWith(
       expect.any(String),
-      35,
+      12,
       expect.objectContaining({ signal: controller.signal }),
     );
+    expect(fetchInterpreter.mock.calls[0][0]).toContain('lock_gate');
   });
 
   it('builds edges only for navigable waterway tags', async () => {

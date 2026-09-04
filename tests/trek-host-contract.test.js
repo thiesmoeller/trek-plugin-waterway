@@ -48,9 +48,9 @@ describe('TREK host route-provider contract', () => {
       id: 'waterway',
       type: 'integration',
       routeProfiles: [
-        { id: 'canoe', label: 'Canoe' },
-        { id: 'kayak', label: 'Kayak' },
-        { id: 'rowing', label: 'Rowing' },
+        { id: 'canoe', label: 'Canoe', icon: 'Waves' },
+        { id: 'kayak', label: 'Kayak', icon: 'Sailboat' },
+        { id: 'rowing', label: 'Rowing', icon: 'Ship' },
       ],
     });
 
@@ -70,8 +70,11 @@ describe('TREK host route-provider contract', () => {
       viaPoints: expect.any(Array),
     });
     expect(result.legs).toHaveLength(2);
-    expect(result.viaPoints).toHaveLength(2);
-    expect(result.viaPoints.map((point) => point.label)).toEqual([
+    const lockVias = result.viaPoints.filter((point) => point.dwellSeconds != null);
+    const timeVias = result.viaPoints.filter((point) => point.tone === 'success');
+    expect(lockVias).toHaveLength(2);
+    expect(timeVias).toHaveLength(2);
+    expect(lockVias.map((point) => point.label)).toEqual([
       'Fixture Lock West',
       'Fixture Lock East',
     ]);
