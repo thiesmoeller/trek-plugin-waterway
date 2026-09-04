@@ -9,10 +9,11 @@
   "license": "MIT",
   "icon": "Waves",
   "type": "integration",
-  "trek": ">=4.0.0 <5.0.0",
+  "trek": ">=4.2.0 <5.0.0",
   "nativeModules": false,
   "permissions": [
     "hook:route-provider",
+    "mcp:tools",
     "db:own",
     "http:outbound:overpass-api.de"
   ],
@@ -89,6 +90,63 @@
         "id": "rowing",
         "label": "Rowing",
         "icon": "Ship"
+      }
+    ],
+    "mcpTools": [
+      {
+        "name": "estimate_route",
+        "title": "Estimate waterway route",
+        "description": "Estimate a canoe, kayak, or rowing route through supplied waypoints. Returns profile-aware distance and duration per leg, lock delays, access warnings, and optional simplified map geometry.",
+        "inputSchema": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "profile": {
+              "type": "string",
+              "enum": ["canoe", "kayak", "rowing"],
+              "description": "Watercraft profile used for access rules and speed estimates."
+            },
+            "waypoints": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 30,
+              "description": "Ordered start, intermediate, and destination coordinates.",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 120,
+                    "description": "Optional human-readable stop name."
+                  },
+                  "lat": {
+                    "type": "number",
+                    "minimum": -90,
+                    "maximum": 90
+                  },
+                  "lng": {
+                    "type": "number",
+                    "minimum": -180,
+                    "maximum": 180
+                  }
+                },
+                "required": ["lat", "lng"]
+              }
+            },
+            "includeGeometry": {
+              "type": "boolean",
+              "default": false,
+              "description": "Include map geometry simplified to at most 200 coordinates."
+            }
+          },
+          "required": ["profile", "waypoints"]
+        },
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": true,
+          "openWorldHint": true
+        }
       }
     ]
   }

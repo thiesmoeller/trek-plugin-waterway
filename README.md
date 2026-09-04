@@ -6,6 +6,11 @@ Integration plugin for TREK 4.x that registers **canoe**, **kayak**, and **rowin
 
 On the TREK planner this is the native day route: waterway geometry is the map line, per-leg times show on the sidebar connectors, lock dots sit on the line with dwell-time tooltips, and each leg also gets a midpoint via labelled with paddle/row time and distance so those times are available on the map itself.
 
+AI agents connected through TREK MCP can call
+`plugin_waterway_estimate_route` to evaluate the same route engine directly.
+The tool returns bounded, structured estimates rather than requiring an agent
+to scrape the planner UI.
+
 ## What it does
 
 - Registers `canoe`, `kayak`, and `rowing` as day-plan route profiles next to Driving/Walking
@@ -15,6 +20,8 @@ On the TREK planner this is the native day route: waterway geometry is the map l
 - Detects nearby OSM locks and adds an average lock delay to rough duration estimates
 - Caches Overpass responses in the plugin's own SQLite database (`db:own`)
 - Returns the TREK 4.2 route shape: coordinates, distance in metres, duration in seconds, per-leg totals, routing notes (≤120 chars), and via points (duration markers + locks, ≤40)
+- Publishes an MCP route-estimation tool with per-leg metrics, lock delays,
+  warnings, and optional geometry simplified to at most 200 coordinates
 
 This provider is a route-estimation aid, not an authoritative navigation product. It deliberately does not yet do tidal context, current modelling, official notices, water levels, portage instructions, or multi-section trip-template creation.
 
@@ -32,6 +39,7 @@ clubs, the waterway overlay, a per-leg time, and a lock-delay marker.
 | Permission | Why |
 |---|---|
 | `hook:route-provider` | Implements `hooks.routeProvider.getRoute` |
+| `mcp:tools` | Publishes `plugin_waterway_estimate_route` to explicitly authorized TREK MCP clients |
 | `db:own` | Persists Overpass cache between requests and restarts |
 | `http:outbound:overpass-api.de` | Fetches waterway data from Overpass |
 
@@ -54,6 +62,12 @@ When `overpassUrl` is omitted, the default is `https://overpass-api.de/api/inter
 Profile speed defaults are 5 km/h for canoe, 6 km/h for kayak, and 8 km/h for rowing. The legacy `speedKmh` config key is still accepted as a fallback for older local instances, but new installs should use the profile-specific keys. `defaultLockDelayMinutes` is added once per detected lock and defaults to 15.
 
 Admins can clear the Overpass cache with **Purge Overpass cache** on the plugin's instance settings dialog.
+
+For AI planning, reconnect the MCP client after activating or updating the
+plugin, and grant its TREK OAuth token the `plugins:use` scope. The tool accepts
+two to thirty ordered waypoints and one of the declared watercraft profiles.
+It does not modify the trip: use TREK's existing MCP day/place tools to save
+the selected stops and set `plugin:waterway/<profile>` as the day or leg mode.
 
 ## Local development
 
@@ -79,7 +93,7 @@ The profiles share the same route-provider contract but apply different suitabil
 - `rowing` avoids mapped portages, canoe passes, rapids, and any whitewater grade because those are not appropriate assumptions for rowing shells.
 - `waterway` is kept as a legacy request alias for `canoe`; it is no longer advertised in the manifest.
 
-TREK calls `getRoute({ tripId, dayId, profile, waypoints }, ctx)` with a 20 s timeout. A throw or timeout falls back to straight lines, the same as an OSRM outage. The plugin aborts its own Overpass work at 18 s and asks Overpass to finish each query within 12 s.
+TREK calls `getRoute({ tripId, dayId, profile, waypoints }, ctx)` with a 20 s timeout. A throw or timeout falls back to straight lines, the same as an OSRM outage. The plugin aborts its own Overpass work at 18 s and asks Overpass to finish each query within 12 s. MCP tool calls have a 15 s host limit, so the direct estimate uses a 13 s route budget and returns at most 200 geometry coordinates.
 
 See the [Merzig to Koblenz 10-day test plan](docs/examples/merzig-koblenz.md)
 for a machine-tested, DRV Gewässerkatalog-based route along the Saar and
@@ -111,6 +125,7 @@ Required tests run standalone without TREK core and without live Overpass:
 - `tests/overpass-client.test.js` — encoded Overpass requests, db cache hits, stale refresh, HTTP failures
 - `tests/trek-host-contract.test.js` — TREK-style discovery/enabling/invocation against deterministic OSM fixtures
 - `tests/trek-route.test.js` — duration labels and TREK vertex/note budgets
+- `tests/mcp-tool.test.js` — direct agent route estimates, lock summaries, bounded geometry, and errors
 - `tests/merzig-koblenz-trip.test.js` — ten connected rowing days from Merzig to Koblenz, club visits, stage chainage, and map/time output
 - `tests/live-merzig-koblenz.test.js` — optional end-to-end routing of those ten days against current Overpass/OSM data
 - `tests/sdk-cli.test.js` — SDK validator CLI exit contract

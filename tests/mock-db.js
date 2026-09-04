@@ -6,10 +6,11 @@ const { createMockHost } = require('trek-plugin-sdk/testing');
 function createHostWithDb(opts = {}) {
   const cacheRows = new Map();
   const migrations = [];
-  const { ctx, logs } = createMockHost({
-    grants: ['db:own'],
+  const host = createMockHost({
+    grants: opts.grants ?? ['db:own'],
     config: opts.config ?? {},
   });
+  const { ctx, logs } = host;
 
   ctx.db.migrate = async (id, sql) => {
     migrations.push({ id, sql });
@@ -38,7 +39,7 @@ function createHostWithDb(opts = {}) {
     return { changes: 0 };
   };
 
-  return { ctx, logs, cacheRows, migrations };
+  return { ...host, ctx, logs, cacheRows, migrations };
 }
 
 module.exports = { createHostWithDb };
