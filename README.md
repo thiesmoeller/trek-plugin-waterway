@@ -112,6 +112,7 @@ Required tests run standalone without TREK core and without live Overpass:
 - `tests/trek-host-contract.test.js` — TREK-style discovery/enabling/invocation against deterministic OSM fixtures
 - `tests/trek-route.test.js` — duration labels and TREK vertex/note budgets
 - `tests/merzig-koblenz-trip.test.js` — ten connected rowing days from Merzig to Koblenz, club visits, stage chainage, and map/time output
+- `tests/live-merzig-koblenz.test.js` — optional end-to-end routing of those ten days against current Overpass/OSM data
 - `tests/sdk-cli.test.js` — SDK validator CLI exit contract
 - `tests/intent.test.js` — scoped check against the original rowing-planner intent for this first provider slice
 
