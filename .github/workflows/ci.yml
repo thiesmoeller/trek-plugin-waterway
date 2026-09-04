@@ -15,25 +15,11 @@ jobs:
         with:
           path: waterway
 
-      - uses: actions/checkout@v4
-        with:
-          repository: liketrek/TREK
-          ref: dev
-          path: trek
-
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 22.12
           cache: npm
-          cache-dependency-path: |
-            trek/plugin-sdk/package-lock.json
-            waterway/package-lock.json
-
-      - name: Build TREK plugin SDK
-        working-directory: trek/plugin-sdk
-        run: |
-          npm ci
-          npm run build
+          cache-dependency-path: waterway/package-lock.json
 
       - name: Install dependencies
         working-directory: waterway

@@ -41,7 +41,7 @@ Set optional instance config in Admin -> Plugins -> Waterway. Manifest `default`
 
 ```json
 {
-  "overpassUrl": "https://overpass.kumi.systems/api/interpreter",
+  "overpassUrl": "https://overpass-api.de/api/interpreter",
   "canoeSpeedKmh": 5,
   "kayakSpeedKmh": 6,
   "rowingSpeedKmh": 8,
@@ -57,15 +57,12 @@ Admins can clear the Overpass cache with **Purge Overpass cache** on the plugin'
 
 ## Local development
 
-Requires Node ≥ 18 and a built [trek-plugin-sdk](https://github.com/liketrek/TREK/tree/dev/plugin-sdk) (sibling under `trek/plugin-sdk`, currently 1.7.x).
+Requires Node ≥ 22.12 and npm. The published
+[`trek-plugin-sdk`](https://www.npmjs.com/package/trek-plugin-sdk) package is
+installed as a development dependency.
 
 ```bash
-cd trek-plugin-waterway
-npm install
-
-# Build the SDK once (from the TREK repo)
-cd ../trek/plugin-sdk && npm install && npm run build && cd ../../trek-plugin-waterway
-
+npm ci
 npm test
 npm run validate
 npm run ci
@@ -133,7 +130,8 @@ A live Overpass smoke test is available for pre-release confidence, but it is in
 npm run test:live
 ```
 
-GitHub Actions runs `npm ci` and `npm run ci`. Because the plugin uses the local SDK dependency `file:../trek/plugin-sdk`, the workflow checks out [liketrek/TREK](https://github.com/liketrek/TREK) `dev` as a sibling directory before installing dependencies.
+GitHub Actions installs the pinned dependencies from `package-lock.json` and
+runs `npm run ci` on Node 22.12.
 
 ## Building a release artifact
 
@@ -149,12 +147,20 @@ dev-linked and active. It shows Day 5 of the Merzig–Koblenz plan using the
 Rowing profile, real OSM waterway geometry, route times, distances, and lock
 markers. See `docs/screenshots/README.md` for the capture checklist.
 
-Then upload `plugin.zip` to a GitHub release and run:
+To create and verify the immutable signed GitHub release:
 
 ```bash
-npx trek-plugin-sdk entry
-npx trek-plugin-sdk preflight --repo OWNER/REPO --tag v1.1.0
+npx trek-plugin-sdk release . \
+  --repo thiesmoeller/trek-plugin-waterway \
+  --tag v1.1.0 \
+  --sign
+npx trek-plugin-sdk preflight \
+  --repo thiesmoeller/trek-plugin-waterway \
+  --tag v1.1.0
 ```
+
+After preflight passes, `trek-plugin-sdk submit` performs the separate
+TREK-Plugins registry submission.
 
 ## License
 
