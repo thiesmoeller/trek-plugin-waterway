@@ -1,13 +1,19 @@
 # Screenshots
 
-The registry store card reads **exactly** `docs/screenshot.png` at the pinned commit. That file is required for `trek-plugin validate`.
+The registry store card reads **exactly** `docs/screenshot.png` at the pinned
+commit. The committed cover is generated from the Merzig–Koblenz test plan:
 
-Recommended live capture (replace the schematic cover before a public registry release):
+```bash
+python3 -m pip install Pillow
+python3 scripts/render-screenshot.py
+```
 
-- Open a TREK 4.x instance with the Waterway plugin installed and enabled.
-- Open a trip day with two or more places near a waterway.
-- Select the `Rowing` (or Canoe/Kayak) route profile in the day-plan route picker.
-- Capture the planner showing the waterway on the map, duration via points / lock dots, and sidebar connector times.
-- Save it as `docs/screenshot.png` (16:9, 1600×900 is ideal).
+The renderer uses the fixture's real route coordinates over OpenStreetMap and
+adds the same concepts TREK renders: selected Rowing profile, waterway
+geometry, numbered days, rowing-club stops, a per-leg duration, and a lock
+delay. It writes a deterministic 1600×900 marketing image after map tiles are
+cached locally.
 
-Do not use live Overpass screenshots as a required test fixture. Deterministic fixture tests remain the release gate.
+A real TREK planner capture may still be added separately for release notes.
+Do not make live Overpass screenshots a required test fixture; deterministic
+fixture tests remain the release gate.

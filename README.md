@@ -22,7 +22,10 @@ This provider is a route-estimation aid, not an authoritative navigation product
 
 ![Waterway route provider profile overview](./docs/screenshot.png)
 
-The store cover is `docs/screenshot.png`. It shows the planner surface this plugin changes: a Rowing profile, the waterway drawn on the map, and travel times both on the route and in the day-plan connectors.
+The store cover is `docs/screenshot.png`. It is generated from the real
+Merzig–Koblenz fixture coordinates over OpenStreetMap and shows the planner
+surface this plugin changes: a Rowing profile, numbered route days, rowing
+clubs, the waterway overlay, a per-leg time, and a lock-delay marker.
 
 ## Permissions
 
@@ -140,7 +143,11 @@ npm run pack
 
 Produces `plugin.zip` suitable for the TREK plugin registry.
 
-The registry store card reads `docs/screenshot.png` at the pinned commit. After a live capture from a TREK 4.x planner (Rowing profile selected, waterway and times visible), replace that file, upload `plugin.zip` to a GitHub release, and run:
+The registry store card reads `docs/screenshot.png` at the pinned commit.
+Regenerate the 1600×900 marketing overview with
+`python3 scripts/render-screenshot.py`; a separate live TREK planner capture
+can be used in release notes. Then upload `plugin.zip` to a GitHub release and
+run:
 
 ```bash
 npx trek-plugin-sdk entry
