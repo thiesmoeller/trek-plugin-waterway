@@ -28,7 +28,9 @@ describe('original rowing-planner intent: first TREK plugin slice', () => {
       'canoeSpeedKmh',
       'kayakSpeedKmh',
       'rowingSpeedKmh',
+      'optimisticLockDelayMinutes',
       'defaultLockDelayMinutes',
+      'conservativeLockDelayMinutes',
     ]);
 
     expect(server).toContain('getRoute(req, hookCtx)');

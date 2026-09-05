@@ -168,9 +168,24 @@ describe('routeProvider hook', () => {
     expect(result.viaPoints.find((point) => point.dwellSeconds != null)).toMatchObject({
       lat: 52.0,
       lng: 13.05,
-      label: 'Fixture Lock West',
+      label: 'Fixture Lock West · 12–40 min (plan 12)',
       tone: 'warn',
       dwellSeconds: 12 * 60,
+    });
+  });
+
+  it('uses the planning lock scenario for the TREK map duration', async () => {
+    fetchMock = mockOverpass(MOCK_ELEMENTS, LOCK_ELEMENTS);
+    globalThis.fetch = fetchMock;
+    const { ctx } = createHostWithDb({ config: { canoeSpeedKmh: 6 } });
+    await plugin.onLoad(ctx);
+
+    const result = await plugin.hooks.routeProvider.getRoute(routeReq);
+    const baseDuration = result.distance / ((6 * 1000) / 3600);
+    expect(result.duration).toBeCloseTo(baseDuration + 25 * 60, 1);
+    expect(result.viaPoints.find((point) => point.dwellSeconds != null)).toMatchObject({
+      label: 'Fixture Lock West · 15–40 min (plan 25)',
+      dwellSeconds: 25 * 60,
     });
   });
 
@@ -188,8 +203,8 @@ describe('routeProvider hook', () => {
     const lockVias = result.viaPoints.filter((point) => point.dwellSeconds != null);
     expect(lockVias).toHaveLength(2);
     expect(lockVias.map((point) => point.label)).toEqual([
-      'Fixture Lock West',
-      'Fixture Lock East',
+      'Fixture Lock West · 10–40 min (plan 10)',
+      'Fixture Lock East · 10–40 min (plan 10)',
     ]);
     expect(lockVias.map((point) => point.dwellSeconds)).toEqual([600, 600]);
   });

@@ -54,13 +54,31 @@
       "hint": "Used for rowing duration estimates."
     },
     {
-      "key": "defaultLockDelayMinutes",
-      "label": "Default lock delay (minutes)",
+      "key": "optimisticLockDelayMinutes",
+      "label": "Optimistic lock time (minutes)",
       "input_type": "number",
       "scope": "instance",
       "placeholder": "15",
       "default": 15,
-      "hint": "Added to route duration for each detected lock."
+      "hint": "Best case per lock when entry is immediate."
+    },
+    {
+      "key": "defaultLockDelayMinutes",
+      "label": "Planning lock time (minutes)",
+      "input_type": "number",
+      "scope": "instance",
+      "placeholder": "25",
+      "default": 25,
+      "hint": "Expected time per lock used for the route shown on the map."
+    },
+    {
+      "key": "conservativeLockDelayMinutes",
+      "label": "Conservative lock time (minutes)",
+      "input_type": "number",
+      "scope": "instance",
+      "placeholder": "40",
+      "default": 40,
+      "hint": "Contingency case per lock for daylight and deadline checks."
     }
   ],
   "actions": [
@@ -96,7 +114,7 @@
       {
         "name": "estimate_route",
         "title": "Estimate waterway route",
-        "description": "Estimate a canoe, kayak, or rowing route through supplied waypoints. Returns profile-aware distance and duration per leg, lock delays, access warnings, and optional simplified map geometry.",
+        "description": "Estimate a canoe, kayak, or rowing route through supplied waypoints. Returns optimistic, planning, and conservative lock-time scenarios, per-leg distance and duration, operational warnings, and optional simplified geometry.",
         "inputSchema": {
           "type": "object",
           "additionalProperties": false,
@@ -138,6 +156,34 @@
               "type": "boolean",
               "default": false,
               "description": "Include map geometry simplified to at most 200 coordinates."
+            },
+            "lockScenario": {
+              "type": "string",
+              "enum": ["optimistic", "planning", "conservative"],
+              "default": "planning",
+              "description": "Scenario used for the primary estimate; all three scenario totals are returned."
+            },
+            "lockMinutes": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Optional per-request lock-time overrides; these do not change instance settings.",
+              "properties": {
+                "optimistic": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1440
+                },
+                "planning": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1440
+                },
+                "conservative": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1440
+                }
+              }
             }
           },
           "required": ["profile", "waypoints"]

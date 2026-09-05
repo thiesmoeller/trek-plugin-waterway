@@ -79,13 +79,22 @@ function durationViaPoint(coords, durationS, distanceM) {
   };
 }
 
-function lockViaPoint(lock) {
+function formatLockMinutes(value) {
+  const minutes = Math.max(0, Number(value) || 0);
+  return Number.isInteger(minutes) ? String(minutes) : minutes.toFixed(1);
+}
+
+function lockViaPoint(lock, lockMinutes) {
+  const timing = lockMinutes
+    ? ` · ${formatLockMinutes(lockMinutes.optimistic)}–${formatLockMinutes(lockMinutes.conservative)} min (plan ${formatLockMinutes(lockMinutes.planning)})`
+    : '';
+  const name = capText(lock.name || lock.ref || 'Lock', Math.max(1, MAX_LABEL_CHARS - timing.length));
   return {
     lat: lock.lat,
     lng: lock.lng,
-    label: capText(lock.name || lock.ref || 'Lock', MAX_LABEL_CHARS),
+    label: `${name}${timing}`,
     tone: 'warn',
-    dwellSeconds: lock.delayS,
+    dwellSeconds: lockMinutes ? lockMinutes.planning * 60 : lock.delayS,
   };
 }
 

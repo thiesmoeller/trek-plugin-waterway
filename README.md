@@ -17,7 +17,8 @@ to scrape the planner UI.
 - Fetches waterway geometry and locks from [Overpass API](https://overpass-api.de/) in one query so the host's 20 s `getRoute` budget is enough for a typical day
 - Filters obvious non-navigable or unsuitable segments by OSM access, oneway, barrier, portage, canoe-pass, and whitewater tags
 - Warns when no mapped put-in or take-out is found near a routed leg
-- Detects nearby OSM locks and adds an average lock delay to rough duration estimates
+- Detects nearby OSM locks and calculates optimistic, planning, and conservative
+  timing scenarios
 - Caches Overpass responses in the plugin's own SQLite database (`db:own`)
 - Returns the TREK 4.2 route shape: coordinates, distance in metres, duration in seconds, per-leg totals, routing notes (≤120 chars), and via points (duration markers + locks, ≤40)
 - Publishes an MCP route-estimation tool with per-leg metrics, lock delays,
@@ -53,13 +54,31 @@ Set optional instance config in Admin -> Plugins -> Waterway. Manifest `default`
   "canoeSpeedKmh": 5,
   "kayakSpeedKmh": 6,
   "rowingSpeedKmh": 8,
-  "defaultLockDelayMinutes": 15
+  "optimisticLockDelayMinutes": 15,
+  "defaultLockDelayMinutes": 25,
+  "conservativeLockDelayMinutes": 40
 }
 ```
 
 When `overpassUrl` is omitted, the default is `https://overpass-api.de/api/interpreter`. The mirror hostname must be listed in the plugin manifest `egress` array if you fork this plugin for a custom host.
 
-Profile speed defaults are 5 km/h for canoe, 6 km/h for kayak, and 8 km/h for rowing. The legacy `speedKmh` config key is still accepted as a fallback for older local instances, but new installs should use the profile-specific keys. `defaultLockDelayMinutes` is added once per detected lock and defaults to 15.
+Profile speed defaults are 5 km/h for canoe, 6 km/h for kayak, and 8 km/h
+for rowing. The legacy `speedKmh` config key is still accepted as a fallback
+for older local instances, but new installs should use the profile-specific
+keys.
+
+Lock timing uses three transparent scenarios per detected lock:
+
+- **Optimistic — 15 min:** the signal is green and entry is immediate.
+- **Planning — 25 min:** the duration shown on the TREK map and the normal
+  itinerary estimate.
+- **Conservative — 40 min:** the contingency estimate for daylight, transfers,
+  and arrival deadlines.
+
+The defaults are configurable by the instance administrator. A long queue,
+closure, booking requirement, or restricted opening window can exceed even
+the conservative estimate and is reported separately rather than hidden in
+the average.
 
 Admins can clear the Overpass cache with **Purge Overpass cache** on the plugin's instance settings dialog.
 
@@ -68,6 +87,9 @@ plugin, and grant its TREK OAuth token the `plugins:use` scope. The tool accepts
 two to thirty ordered waypoints and one of the declared watercraft profiles.
 It does not modify the trip: use TREK's existing MCP day/place tools to save
 the selected stops and set `plugin:waterway/<profile>` as the day or leg mode.
+It returns all three lock scenarios on every call. `lockScenario` selects the
+primary estimate, while optional `lockMinutes` values override the three
+per-lock assumptions for that call only and never change instance settings.
 
 ## Local development
 

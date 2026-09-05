@@ -17,7 +17,7 @@ describe('waterway MCP route tool', () => {
     const mod = await import('../server/index.js');
     plugin = mod.default ?? mod;
     ({ ctx } = createHostWithDb({
-      config: { rowingSpeedKmh: 8, defaultLockDelayMinutes: 10 },
+      config: { rowingSpeedKmh: 8 },
     }));
     await plugin.onLoad(ctx);
   });
@@ -38,7 +38,12 @@ describe('waterway MCP route tool', () => {
 
     expect(result).toMatchObject({
       profile: 'rowing',
+      lockModel: {
+        selectedScenario: 'planning',
+        perLockMinutes: { optimistic: 15, planning: 25, conservative: 40 },
+      },
       estimate: {
+        scenario: 'planning',
         distanceMeters: expect.any(Number),
         distanceKm: expect.any(Number),
         durationSeconds: expect.any(Number),
@@ -51,11 +56,12 @@ describe('waterway MCP route tool', () => {
         distanceKm: expect.any(Number),
         durationSeconds: expect.any(Number),
         durationMinutes: expect.any(Number),
+        lockCount: 2,
         note: expect.stringContaining('2 locks'),
       }],
       locks: [
-        { name: 'Fixture Lock West', lat: 52, lng: 13.05, delayMinutes: 10 },
-        { name: 'Fixture Lock East', lat: 52, lng: 13.15, delayMinutes: 10 },
+        { name: 'Fixture Lock West', lat: 52, lng: 13.05, delayMinutes: 25, openingHours: 'Mo-Su 08:00-18:00' },
+        { name: 'Fixture Lock East', lat: 52, lng: 13.15, delayMinutes: 25 },
       ],
       geometry: {
         coordinates: expect.any(Array),
@@ -66,6 +72,40 @@ describe('waterway MCP route tool', () => {
     });
     expect(result.estimate.distanceMeters).toBe(result.legs[0].distanceMeters);
     expect(result.estimate.durationMinutes).toBeGreaterThan(20);
+    expect(result.scenarios.planning.durationMinutes - result.scenarios.optimistic.durationMinutes).toBe(20);
+    expect(result.scenarios.conservative.durationMinutes - result.scenarios.planning.durationMinutes).toBe(30);
+    expect(result.operationalWarnings).toContain(
+      'Fixture Lock West: mapped opening hours Mo-Su 08:00-18:00; verify with the operator.',
+    );
+  });
+
+  it('supports non-persistent MCP scenario selection and per-request lock overrides', async () => {
+    const conservative = await plugin.hooks.mcpToolProvider.callTool({
+      name: 'estimate_route',
+      args: {
+        profile: 'rowing',
+        waypoints,
+        lockScenario: 'conservative',
+        lockMinutes: { optimistic: 10, planning: 20, conservative: 50 },
+      },
+    }, ctx);
+
+    expect(conservative.lockModel).toMatchObject({
+      selectedScenario: 'conservative',
+      perLockMinutes: { optimistic: 10, planning: 20, conservative: 50 },
+    });
+    expect(conservative.estimate).toMatchObject({
+      scenario: 'conservative',
+      lockDelayMinutes: 100,
+    });
+    expect(conservative.locks.every((lock) => lock.delayMinutes === 50)).toBe(true);
+    expect(conservative.scenarios.conservative.durationMinutes - conservative.scenarios.planning.durationMinutes).toBe(60);
+
+    const nextCall = await plugin.hooks.mcpToolProvider.callTool({
+      name: 'estimate_route',
+      args: { profile: 'rowing', waypoints },
+    }, ctx);
+    expect(nextCall.lockModel.perLockMinutes).toEqual({ optimistic: 15, planning: 25, conservative: 40 });
   });
 
   it('runs through the SDK host driver only when mcp:tools is granted', async () => {
