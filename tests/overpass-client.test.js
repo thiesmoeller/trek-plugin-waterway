@@ -77,6 +77,41 @@ describe('Overpass client', () => {
     await expect(client.fetchInterpreter('out;')).rejects.toThrow('overpass_http_429');
   });
 
+  it('does not retry a non-retryable query error', async () => {
+    const { ctx } = createHostWithDb();
+    const fetchFn = vi.fn(async () => ({ ok: false, status: 400 }));
+    const client = createOverpassClient(ctx, { fetchFn });
+
+    await expect(client.fetchInterpreter('bad query')).rejects.toThrow('overpass_http_400');
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('propagates a caller abort instead of trying another endpoint', async () => {
+    const { ctx } = createHostWithDb();
+    const controller = new AbortController();
+    const fetchFn = vi.fn((_url, { signal }) => new Promise((_resolve, reject) => {
+      signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+    }));
+    const client = createOverpassClient(ctx, { fetchFn });
+
+    const pending = client.fetchInterpreter('out;', 35, { signal: controller.signal });
+    controller.abort();
+    await expect(pending).rejects.toThrow('overpass_aborted');
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('normalizes a successful response with no elements array', async () => {
+    const { ctx } = createHostWithDb();
+    const client = createOverpassClient(ctx, {
+      fetchFn: vi.fn(async () => ({ ok: true, json: async () => ({}) })),
+    });
+
+    await expect(client.fetchInterpreter('out;')).resolves.toMatchObject({
+      elements: [],
+      endpoint: DEFAULT_OVERPASS_URL,
+    });
+  });
+
   it('fails over to the next declared endpoint after a retryable response', async () => {
     const { ctx } = createHostWithDb();
     const fetchFn = vi.fn()
