@@ -314,12 +314,14 @@ async function routeWaterwayLeg(from, to, options) {
 
   const cacheKey = `${legKey}|${bbox.south.toFixed(3)}|${bbox.west.toFixed(3)}|${bbox.north.toFixed(3)}|${bbox.east.toFixed(3)}`;
   let elements = null;
+  let usedStaleData = false;
   const now = Date.now();
   const hit = cache.get(cacheKey);
   if (hit && now - hit.at < cacheTtlMs) {
     hit.at = now;
     cache.set(cacheKey, hit);
     elements = hit.elements;
+    usedStaleData = hit.stale === true;
   } else {
     const overpassTimeoutS = options.overpassTimeoutS ?? 12;
     const queryFixed = `
@@ -344,7 +346,8 @@ out body center;
     const data = await options.overpassClient.fetchInterpreter(queryFixed.trim(), overpassTimeoutS, { signal: options.signal });
     if (!data?.elements?.length) throw new Error('waterway_no_data');
     elements = data.elements;
-    cache.set(cacheKey, { at: now, elements });
+    usedStaleData = data.stale === true;
+    cache.set(cacheKey, { at: now, elements, stale: usedStaleData });
     trimCache(cache, cacheMax);
   }
 
@@ -381,8 +384,9 @@ out body center;
 
   if (!nearAccessPoint(base.accessPoints, from)) meta.warnings.push('No mapped put-in nearby');
   if (!nearAccessPoint(base.accessPoints, to)) meta.warnings.push('No mapped take-out nearby');
+  if (usedStaleData) meta.warnings.push('Using cached OSM data; live Overpass unavailable');
 
-  return { coords, distanceM, warnings: meta.warnings, viaPoints: meta.viaPoints, elements };
+  return { coords, distanceM, warnings: meta.warnings, viaPoints: meta.viaPoints, elements, stale: usedStaleData };
 }
 
 module.exports = {

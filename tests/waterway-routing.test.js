@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { routeWaterwayLeg } from '../server/waterway/routing.js';
-import { extractLocksFromOsmElements } from '../server/waterway/context.js';
+import {
+  extractLocksFromOsmElements,
+  fetchLocksForRoute,
+  projectPointToPolyline,
+  routeLengthM,
+} from '../server/waterway/context.js';
 
 describe('waterway routing engine', () => {
   it('routes a mocked Overpass waterway graph', async () => {
@@ -69,6 +74,105 @@ describe('waterway routing engine', () => {
       expect.objectContaining({ signal: controller.signal }),
     );
     expect(fetchInterpreter.mock.calls[0][0]).toContain('lock_gate');
+  });
+
+  it('trims caller-provided route caches to their configured maximum', async () => {
+    const elements = [
+      { type: 'node', id: 1, lat: 52, lon: 13 },
+      { type: 'node', id: 2, lat: 52, lon: 13.1 },
+      { type: 'way', id: 10, nodes: [1, 2], tags: { waterway: 'river' } },
+    ];
+    const cache = new Map();
+    const overpassClient = { fetchInterpreter: vi.fn(async () => ({ elements })) };
+
+    await routeWaterwayLeg(
+      { lat: 52, lng: 13 },
+      { lat: 52, lng: 13.1 },
+      { overpassClient, legKey: 'cache-a', cache, cacheMax: 1, cacheTtlMs: 60_000 },
+    );
+    await routeWaterwayLeg(
+      { lat: 52, lng: 13 },
+      { lat: 52, lng: 13.1 },
+      { overpassClient, legKey: 'cache-b', cache, cacheMax: 1, cacheTtlMs: 60_000 },
+    );
+
+    expect(cache).toHaveLength(1);
+    expect(overpassClient.fetchInterpreter).toHaveBeenCalledTimes(2);
+  });
+
+  it('reuses a warm in-memory leg cache on repeat requests', async () => {
+    const elements = [
+      { type: 'node', id: 1, lat: 52, lon: 13 },
+      { type: 'node', id: 2, lat: 52, lon: 13.1 },
+      { type: 'way', id: 10, nodes: [1, 2], tags: { waterway: 'river' } },
+    ];
+    const cache = new Map();
+    const fetchInterpreter = vi.fn(async () => ({ elements }));
+    const options = {
+      overpassClient: { fetchInterpreter },
+      legKey: 'warm-cache',
+      cache,
+      cacheTtlMs: 60_000,
+    };
+
+    const first = await routeWaterwayLeg(
+      { lat: 52, lng: 13 },
+      { lat: 52, lng: 13.1 },
+      options,
+    );
+    const second = await routeWaterwayLeg(
+      { lat: 52, lng: 13 },
+      { lat: 52, lng: 13.1 },
+      options,
+    );
+
+    expect(fetchInterpreter).toHaveBeenCalledTimes(1);
+    expect(second.coords).toEqual(first.coords);
+    expect(second.distanceM).toBe(first.distanceM);
+  });
+
+  it('rejects oversized requests, empty responses, and points too far from mapped water', async () => {
+    const fetchInterpreter = vi.fn(async () => ({ elements: [] }));
+    await expect(routeWaterwayLeg(
+      { lat: 0, lng: 0 },
+      { lat: 3, lng: 0 },
+      { overpassClient: { fetchInterpreter }, legKey: 'oversized' },
+    )).rejects.toThrow('waterway_bbox_too_large');
+    expect(fetchInterpreter).not.toHaveBeenCalled();
+
+    await expect(routeWaterwayLeg(
+      { lat: 52, lng: 13 },
+      { lat: 52, lng: 13.1 },
+      { overpassClient: { fetchInterpreter }, legKey: 'empty' },
+    )).rejects.toThrow('waterway_no_data');
+
+    const elements = [
+      { type: 'node', id: 1, lat: 52, lon: 13 },
+      { type: 'node', id: 2, lat: 52, lon: 13.1 },
+      { type: 'way', id: 10, nodes: [1, 2], tags: { waterway: 'river' } },
+    ];
+    await expect(routeWaterwayLeg(
+      { lat: 53, lng: 14 },
+      { lat: 52, lng: 13.1 },
+      { overpassClient: { fetchInterpreter: async () => ({ elements }) }, legKey: 'far', snapMaxM: 50 },
+    )).rejects.toThrow('waterway_snap_too_far_a');
+  });
+
+  it('rejects disconnected waterway components instead of drawing a straight connector', async () => {
+    const elements = [
+      { type: 'node', id: 1, lat: 52, lon: 13 },
+      { type: 'node', id: 2, lat: 52, lon: 13.02 },
+      { type: 'node', id: 3, lat: 52, lon: 13.08 },
+      { type: 'node', id: 4, lat: 52, lon: 13.1 },
+      { type: 'way', id: 10, nodes: [1, 2], tags: { waterway: 'river' } },
+      { type: 'way', id: 11, nodes: [3, 4], tags: { waterway: 'river' } },
+    ];
+
+    await expect(routeWaterwayLeg(
+      { lat: 52, lng: 13 },
+      { lat: 52, lng: 13.1 },
+      { overpassClient: { fetchInterpreter: async () => ({ elements }) }, legKey: 'disconnected' },
+    )).rejects.toThrow('waterway_no_path');
   });
 
   it('builds edges only for navigable waterway tags', async () => {
@@ -238,5 +342,79 @@ describe('waterway routing engine', () => {
         phone: '+49 30 123456',
       },
     });
+  });
+
+  it('projects lock positions onto route chainage and measures route length', () => {
+    const coords = [[52.0, 13.0], [52.0, 13.1], [52.0, 13.2]];
+    expect(routeLengthM(coords)).toBeGreaterThan(13_000);
+    expect(routeLengthM([[52, 13]])).toBe(0);
+    expect(projectPointToPolyline(52.0, 13.15, coords)).toMatchObject({
+      distanceM: expect.any(Number),
+      chainageM: expect.any(Number),
+      lat: 52,
+      lng: 13.15,
+    });
+    expect(projectPointToPolyline(52, 13, [[52, 13]])).toBeNull();
+  });
+
+  it('ignores malformed, unrelated, coordinate-less, duplicate, and distant lock elements', () => {
+    const locks = extractLocksFromOsmElements([
+      null,
+      { type: 'node', tags: { lock: 'yes' } },
+      { type: 'node', id: 1, lat: 52, lon: 13.01, tags: { amenity: 'cafe' } },
+      { type: 'node', id: 2, tags: { lock: 'yes' } },
+      { type: 'node', id: 3, lat: 53, lon: 13.05, tags: { water: 'lock' } },
+      { type: 'node', id: 4, lat: 52, lon: 13.04, tags: { water: 'lock', ref: 'L-4' } },
+      { type: 'node', id: 4, lat: 52, lon: 13.04, tags: { water: 'lock', ref: 'L-4 duplicate' } },
+    ], [[52, 13], [52, 13.1]], { defaultLockDelayMinutes: -5 });
+
+    expect(locks).toHaveLength(1);
+    expect(locks[0]).toMatchObject({ ref: 'L-4', delayS: 0 });
+  });
+
+  it('fetches lock context with the route signal and rejects an excessive bbox', async () => {
+    const signal = new AbortController().signal;
+    const fetchInterpreter = vi.fn(async () => ({
+      elements: [{
+        type: 'node',
+        id: 5,
+        lat: 52,
+        lon: 13.05,
+        tags: {
+          lock: 'yes',
+          name: 'Context Lock',
+          website: 'https://lock.example',
+          vhf: '20',
+        },
+      }],
+    }));
+    const locks = await fetchLocksForRoute(
+      { coords: [[52, 13], [52, 13.1]] },
+      { fetchInterpreter },
+      { signal, defaultLockDelayMinutes: 20, contextBboxPadM: 100 },
+    );
+
+    expect(fetchInterpreter).toHaveBeenCalledWith(
+      expect.stringContaining('relation["lock"="yes"]'),
+      25,
+      { signal },
+    );
+    expect(locks).toMatchObject([{
+      name: 'Context Lock',
+      delayS: 1200,
+      tags: { website: 'https://lock.example', vhf: '20' },
+    }]);
+
+    await expect(fetchLocksForRoute(
+      { coords: [[0, 0], [3, 0]] },
+      { fetchInterpreter },
+    )).rejects.toThrow('lock_bbox_too_large');
+
+    const empty = await fetchLocksForRoute(
+      { coords: [] },
+      { fetchInterpreter: async () => ({ elements: [] }) },
+      { contextBboxPadM: 0 },
+    );
+    expect(empty).toEqual([]);
   });
 });

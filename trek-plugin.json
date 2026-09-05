@@ -15,7 +15,9 @@
     "hook:route-provider",
     "mcp:tools",
     "db:own",
-    "http:outbound:overpass-api.de"
+    "http:outbound:overpass-api.de",
+    "http:outbound:overpass.kumi.systems",
+    "http:outbound:overpass.private.coffee"
   ],
   "settings": [
     {
@@ -24,7 +26,7 @@
       "input_type": "text",
       "scope": "instance",
       "placeholder": "https://overpass-api.de/api/interpreter",
-      "hint": "Optional Overpass API interpreter endpoint. Custom hosts must also be listed in egress."
+      "hint": "Optional single Overpass endpoint. When empty, the plugin can fail over across its declared public mirrors."
     },
     {
       "key": "canoeSpeedKmh",
@@ -90,7 +92,9 @@
     }
   ],
   "egress": [
-    "overpass-api.de"
+    "overpass-api.de",
+    "overpass.kumi.systems",
+    "overpass.private.coffee"
   ],
   "capabilities": {
     "routeProfiles": [

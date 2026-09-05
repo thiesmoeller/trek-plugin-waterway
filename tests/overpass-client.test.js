@@ -1,11 +1,16 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_OVERPASS_URL,
+  DEFAULT_OVERPASS_URLS,
   createOverpassClient,
 } from '../server/overpass.js';
 import { createHostWithDb } from './mock-db.js';
 
 describe('Overpass client', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('posts encoded interpreter queries to the default Overpass endpoint', async () => {
     const fetchFn = vi.fn(async () => ({
       ok: true,
@@ -70,5 +75,131 @@ describe('Overpass client', () => {
     });
 
     await expect(client.fetchInterpreter('out;')).rejects.toThrow('overpass_http_429');
+  });
+
+  it('does not retry a non-retryable query error', async () => {
+    const { ctx } = createHostWithDb();
+    const fetchFn = vi.fn(async () => ({ ok: false, status: 400 }));
+    const client = createOverpassClient(ctx, { fetchFn });
+
+    await expect(client.fetchInterpreter('bad query')).rejects.toThrow('overpass_http_400');
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('propagates a caller abort instead of trying another endpoint', async () => {
+    const { ctx } = createHostWithDb();
+    const controller = new AbortController();
+    let markStarted;
+    const started = new Promise((resolve) => { markStarted = resolve; });
+    const fetchFn = vi.fn((_url, { signal }) => new Promise((_resolve, reject) => {
+      markStarted();
+      signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+    }));
+    const client = createOverpassClient(ctx, { fetchFn });
+
+    const pending = client.fetchInterpreter('out;', 35, { signal: controller.signal });
+    await started;
+    controller.abort();
+    await expect(pending).rejects.toThrow('overpass_aborted');
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('normalizes a successful response with no elements array', async () => {
+    const { ctx } = createHostWithDb();
+    const client = createOverpassClient(ctx, {
+      fetchFn: vi.fn(async () => ({ ok: true, json: async () => ({}) })),
+    });
+
+    await expect(client.fetchInterpreter('out;')).resolves.toMatchObject({
+      elements: [],
+      endpoint: DEFAULT_OVERPASS_URL,
+    });
+  });
+
+  it('fails over to the next declared endpoint after a retryable response', async () => {
+    const { ctx } = createHostWithDb();
+    const fetchFn = vi.fn()
+      .mockResolvedValueOnce({ ok: false, status: 429 })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ elements: [{ type: 'node', id: 7 }] }),
+      });
+    const client = createOverpassClient(ctx, { fetchFn });
+
+    const result = await client.fetchInterpreter('out;');
+
+    expect(result).toMatchObject({ elements: [{ type: 'node', id: 7 }], endpoint: DEFAULT_OVERPASS_URLS[1] });
+    expect(fetchFn.mock.calls.map(([url]) => url)).toEqual(DEFAULT_OVERPASS_URLS.slice(0, 2));
+  });
+
+  it('moves on when one endpoint exceeds its attempt budget', async () => {
+    vi.useFakeTimers();
+    const { ctx } = createHostWithDb();
+    const fetchFn = vi.fn()
+      .mockImplementationOnce((_url, { signal }) => new Promise((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
+      }))
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ elements: [{ type: 'node', id: 8 }] }),
+      });
+    const client = createOverpassClient(ctx, { fetchFn, attemptTimeoutsMs: [10, 10, 10] });
+
+    const pending = client.fetchInterpreter('out;');
+    await vi.advanceTimersByTimeAsync(10);
+    await expect(pending).resolves.toMatchObject({
+      elements: [{ type: 'node', id: 8 }],
+      endpoint: DEFAULT_OVERPASS_URLS[1],
+    });
+  });
+
+  it('serves a recent stale cache entry with a visible warning when all endpoints fail', async () => {
+    const { ctx, logs, cacheRows } = createHostWithDb();
+    const query = 'way["waterway"="river"]; out;';
+    cacheRows.set(query, {
+      elements_json: JSON.stringify([{ type: 'way', id: 9 }]),
+      fetched_at: Date.now() - 60_000,
+    });
+    const client = createOverpassClient(ctx, {
+      cacheTtlMs: 1,
+      fetchFn: vi.fn(async () => ({ ok: false, status: 503 })),
+    });
+
+    const result = await client.fetchInterpreter(query);
+
+    expect(result).toEqual({ elements: [{ type: 'way', id: 9 }], stale: true });
+    expect(logs).toContainEqual(expect.objectContaining({
+      level: 'warn',
+      msg: expect.stringContaining('using cached waterway data'),
+    }));
+  });
+
+  it('does not use cache data beyond the stale safety window', async () => {
+    const { ctx, cacheRows } = createHostWithDb();
+    const query = 'way["waterway"="river"]; out;';
+    cacheRows.set(query, {
+      elements_json: JSON.stringify([{ type: 'way', id: 10 }]),
+      fetched_at: Date.now() - 10_000,
+    });
+    const client = createOverpassClient(ctx, {
+      cacheTtlMs: 1,
+      staleCacheMaxAgeMs: 100,
+      fetchFn: vi.fn(async () => ({ ok: false, status: 503 })),
+    });
+
+    await expect(client.fetchInterpreter(query)).rejects.toThrow('overpass_http_503');
+  });
+
+  it('uses only an explicitly configured endpoint', async () => {
+    const { ctx } = createHostWithDb();
+    const fetchFn = vi.fn(async () => ({ ok: false, status: 429 }));
+    const client = createOverpassClient(ctx, {
+      overpassUrl: 'https://overpass.example/api/interpreter',
+      fetchFn,
+    });
+
+    await expect(client.fetchInterpreter('out;', 1)).rejects.toThrow('overpass_http_429');
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    expect(fetchFn.mock.calls[0][0]).toBe('https://overpass.example/api/interpreter');
   });
 });
