@@ -75,8 +75,8 @@ describe('TREK host route-provider contract', () => {
     expect(lockVias).toHaveLength(2);
     expect(timeVias).toHaveLength(2);
     expect(lockVias.map((point) => point.label)).toEqual([
-      'Fixture Lock West',
-      'Fixture Lock East',
+      'Fixture Lock West · 10–40 min (plan 10)',
+      'Fixture Lock East · 10–40 min (plan 10)',
     ]);
     expect(result.duration).toBeGreaterThan(result.distance / ((5 * 1000) / 3600));
     for (const coord of result.coordinates) {
