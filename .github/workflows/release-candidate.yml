@@ -1,0 +1,77 @@
+name: Release candidate
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22.12
+          cache: npm
+
+      - name: Verify tag matches manifest version
+        run: |
+          node -e '
+            const manifest = require("./trek-plugin.json");
+            const expected = `v${manifest.version}`;
+            if (process.env.GITHUB_REF_NAME !== expected) {
+              throw new Error(`Tag ${process.env.GITHUB_REF_NAME} does not match manifest ${expected}`);
+            }
+          '
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test, validate, and pack
+        run: npm run ci
+
+      - name: Write artifact checksum
+        run: sha256sum plugin.zip > plugin.zip.sha256
+
+      - name: Sign artifact when signing key is configured
+        env:
+          TREK_PLUGIN_SIGNING_KEY: ${{ secrets.TREK_PLUGIN_SIGNING_KEY }}
+        run: |
+          if [ -n "$TREK_PLUGIN_SIGNING_KEY" ]; then
+            key="$RUNNER_TEMP/trek-plugin-signing.key"
+            printf '%s' "$TREK_PLUGIN_SIGNING_KEY" > "$key"
+            chmod 600 "$key"
+            npx trek-plugin-sdk sign plugin.zip --key "$key" > plugin.zip.signature.txt
+          fi
+
+      - name: Upload immutable build evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: waterway-${{ github.ref_name }}
+          path: |
+            plugin.zip
+            plugin.zip.sha256
+            plugin.zip.signature.txt
+            coverage
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Create GitHub prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          assets=(plugin.zip plugin.zip.sha256)
+          if [ -f plugin.zip.signature.txt ]; then
+            assets+=(plugin.zip.signature.txt)
+          fi
+          gh release create "$GITHUB_REF_NAME" "${assets[@]}" \
+            --verify-tag \
+            --prerelease \
+            --generate-notes \
+            --title "Waterway ${GITHUB_REF_NAME} release candidate"

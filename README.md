@@ -14,7 +14,9 @@ to scrape the planner UI.
 ## What it does
 
 - Registers `canoe`, `kayak`, and `rowing` as day-plan route profiles next to Driving/Walking
-- Fetches waterway geometry and locks from [Overpass API](https://overpass-api.de/) in one query so the host's 20 s `getRoute` budget is enough for a typical day
+- Fetches waterway geometry and locks from Overpass in one query, fails over
+  across three declared public instances, and can use a recent stale cache
+  during a temporary outage
 - Filters obvious non-navigable or unsuitable segments by OSM access, oneway, barrier, portage, canoe-pass, and whitewater tags
 - Warns when no mapped put-in or take-out is found near a routed leg
 - Detects nearby OSM locks and calculates optimistic, planning, and conservative
@@ -43,6 +45,8 @@ clubs, the waterway overlay, a per-leg time, and a lock-delay marker.
 | `mcp:tools` | Publishes `plugin_waterway_estimate_route` to explicitly authorized TREK MCP clients |
 | `db:own` | Persists Overpass cache between requests and restarts |
 | `http:outbound:overpass-api.de` | Fetches waterway data from Overpass |
+| `http:outbound:overpass.kumi.systems` | Uses the Kumi Overpass instance when the primary endpoint is unavailable |
+| `http:outbound:overpass.private.coffee` | Uses the Private Coffee Overpass instance as the final declared fallback |
 
 ## Setup
 
@@ -60,7 +64,12 @@ Set optional instance config in Admin -> Plugins -> Waterway. Manifest `default`
 }
 ```
 
-When `overpassUrl` is omitted, the default is `https://overpass-api.de/api/interpreter`. The mirror hostname must be listed in the plugin manifest `egress` array if you fork this plugin for a custom host.
+When `overpassUrl` is omitted, the plugin tries `overpass-api.de`,
+`overpass.kumi.systems`, then `overpass.private.coffee` within the route
+request's time budget. If every endpoint fails, cached OSM data up to seven
+days old is returned with a visible warning. Setting `overpassUrl` selects only
+that endpoint; its hostname must be declared in `egress` if you fork the plugin
+for a different service.
 
 Profile speed defaults are 5 km/h for canoe, 6 km/h for kayak, and 8 km/h
 for rowing. The legacy `speedKmh` config key is still accepted as a fallback
@@ -100,6 +109,7 @@ installed as a development dependency.
 ```bash
 npm ci
 npm test
+npm run test:coverage
 npm run validate
 npm run ci
 npm run dev
@@ -159,7 +169,9 @@ npm run validate
 npm run pack
 ```
 
-`npm run ci` runs the required release checks in order: tests, SDK validation, and packaging.
+`npm run ci` enforces coverage thresholds, validates the plugin, and packages
+it. GitHub Actions retains both `plugin.zip` and the HTML/LCOV coverage report
+as downloadable workflow artifacts.
 
 A live Overpass smoke test is available for pre-release confidence, but it is intentionally not part of required CI because OSM data, rate limits, and network availability are outside the plugin's control:
 
@@ -184,13 +196,15 @@ dev-linked and active. It shows Day 5 of the Merzig–Koblenz plan using the
 Rowing profile, real OSM waterway geometry, route times, distances, and lock
 markers. See `docs/screenshots/README.md` for the capture checklist.
 
-To create and verify the immutable signed GitHub release:
+For a controlled pilot before upstream submission, follow the
+[release-candidate testing guide](docs/release-testing.md). Pushing a tag that
+exactly matches the manifest version runs the release workflow and creates a
+GitHub prerelease from the tested package.
+
+After that exact candidate passes acceptance testing, verify it before
+registration:
 
 ```bash
-npx trek-plugin-sdk release . \
-  --repo thiesmoeller/trek-plugin-waterway \
-  --tag v1.1.0 \
-  --sign
 npx trek-plugin-sdk preflight \
   --repo thiesmoeller/trek-plugin-waterway \
   --tag v1.1.0
