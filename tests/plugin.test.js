@@ -276,6 +276,21 @@ describe('routeProvider hook', () => {
     expect(cacheRows.size).toBe(1);
   });
 
+  it('keeps a route available from recent cache data during an Overpass outage', async () => {
+    const { ctx, cacheRows } = createHostWithDb();
+    await plugin.onLoad(ctx);
+    await plugin.hooks.routeProvider.getRoute(routeReq);
+
+    for (const row of cacheRows.values()) row.fetched_at = Date.now() - (60 * 60 * 1000);
+    fetchMock.mockImplementation(async () => ({ ok: false, status: 503 }));
+
+    const result = await plugin.hooks.routeProvider.getRoute({ ...routeReq, dayId: 99 });
+
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    expect(result.coordinates.length).toBeGreaterThanOrEqual(2);
+    expect(result.legs[0].note).toContain('Using cached OSM data');
+  });
+
   it('runs db migration on load', async () => {
     const { ctx, migrations } = createHostWithDb();
     await plugin.onLoad(ctx);
