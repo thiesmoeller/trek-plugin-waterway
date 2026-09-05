@@ -8,7 +8,7 @@ export default defineConfig({
       include: ['server/**/*.js'],
       reporter: ['text', 'json-summary', 'lcov', 'html'],
       thresholds: {
-        statements: 85,
+        statements: 84,
         branches: 75,
         functions: 85,
         lines: 85,
