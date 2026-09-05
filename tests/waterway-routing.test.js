@@ -76,6 +76,30 @@ describe('waterway routing engine', () => {
     expect(fetchInterpreter.mock.calls[0][0]).toContain('lock_gate');
   });
 
+  it('trims caller-provided route caches to their configured maximum', async () => {
+    const elements = [
+      { type: 'node', id: 1, lat: 52, lon: 13 },
+      { type: 'node', id: 2, lat: 52, lon: 13.1 },
+      { type: 'way', id: 10, nodes: [1, 2], tags: { waterway: 'river' } },
+    ];
+    const cache = new Map();
+    const overpassClient = { fetchInterpreter: vi.fn(async () => ({ elements })) };
+
+    await routeWaterwayLeg(
+      { lat: 52, lng: 13 },
+      { lat: 52, lng: 13.1 },
+      { overpassClient, legKey: 'cache-a', cache, cacheMax: 1, cacheTtlMs: 60_000 },
+    );
+    await routeWaterwayLeg(
+      { lat: 52, lng: 13 },
+      { lat: 52, lng: 13.1 },
+      { overpassClient, legKey: 'cache-b', cache, cacheMax: 1, cacheTtlMs: 60_000 },
+    );
+
+    expect(cache).toHaveLength(1);
+    expect(overpassClient.fetchInterpreter).toHaveBeenCalledTimes(2);
+  });
+
   it('rejects oversized requests, empty responses, and points too far from mapped water', async () => {
     const fetchInterpreter = vi.fn(async () => ({ elements: [] }));
     await expect(routeWaterwayLeg(
@@ -337,5 +361,12 @@ describe('waterway routing engine', () => {
       { coords: [[0, 0], [3, 0]] },
       { fetchInterpreter },
     )).rejects.toThrow('lock_bbox_too_large');
+
+    const empty = await fetchLocksForRoute(
+      { coords: [] },
+      { fetchInterpreter: async () => ({ elements: [] }) },
+      { contextBboxPadM: 0 },
+    );
+    expect(empty).toEqual([]);
   });
 });
