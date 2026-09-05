@@ -127,6 +127,23 @@ describe('waterway routing engine', () => {
     )).rejects.toThrow('waterway_snap_too_far_a');
   });
 
+  it('rejects disconnected waterway components instead of drawing a straight connector', async () => {
+    const elements = [
+      { type: 'node', id: 1, lat: 52, lon: 13 },
+      { type: 'node', id: 2, lat: 52, lon: 13.02 },
+      { type: 'node', id: 3, lat: 52, lon: 13.08 },
+      { type: 'node', id: 4, lat: 52, lon: 13.1 },
+      { type: 'way', id: 10, nodes: [1, 2], tags: { waterway: 'river' } },
+      { type: 'way', id: 11, nodes: [3, 4], tags: { waterway: 'river' } },
+    ];
+
+    await expect(routeWaterwayLeg(
+      { lat: 52, lng: 13 },
+      { lat: 52, lng: 13.1 },
+      { overpassClient: { fetchInterpreter: async () => ({ elements }) }, legKey: 'disconnected' },
+    )).rejects.toThrow('waterway_no_path');
+  });
+
   it('builds edges only for navigable waterway tags', async () => {
     const { buildUndirectedWaterwayEdges } = await import('../server/waterway/routing.js');
     const elements = [
