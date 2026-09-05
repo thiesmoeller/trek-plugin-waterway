@@ -89,12 +89,16 @@ describe('Overpass client', () => {
   it('propagates a caller abort instead of trying another endpoint', async () => {
     const { ctx } = createHostWithDb();
     const controller = new AbortController();
+    let markStarted;
+    const started = new Promise((resolve) => { markStarted = resolve; });
     const fetchFn = vi.fn((_url, { signal }) => new Promise((_resolve, reject) => {
+      markStarted();
       signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true });
     }));
     const client = createOverpassClient(ctx, { fetchFn });
 
     const pending = client.fetchInterpreter('out;', 35, { signal: controller.signal });
+    await started;
     controller.abort();
     await expect(pending).rejects.toThrow('overpass_aborted');
     expect(fetchFn).toHaveBeenCalledTimes(1);
