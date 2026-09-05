@@ -100,6 +100,37 @@ describe('waterway routing engine', () => {
     expect(overpassClient.fetchInterpreter).toHaveBeenCalledTimes(2);
   });
 
+  it('reuses a warm in-memory leg cache on repeat requests', async () => {
+    const elements = [
+      { type: 'node', id: 1, lat: 52, lon: 13 },
+      { type: 'node', id: 2, lat: 52, lon: 13.1 },
+      { type: 'way', id: 10, nodes: [1, 2], tags: { waterway: 'river' } },
+    ];
+    const cache = new Map();
+    const fetchInterpreter = vi.fn(async () => ({ elements }));
+    const options = {
+      overpassClient: { fetchInterpreter },
+      legKey: 'warm-cache',
+      cache,
+      cacheTtlMs: 60_000,
+    };
+
+    const first = await routeWaterwayLeg(
+      { lat: 52, lng: 13 },
+      { lat: 52, lng: 13.1 },
+      options,
+    );
+    const second = await routeWaterwayLeg(
+      { lat: 52, lng: 13 },
+      { lat: 52, lng: 13.1 },
+      options,
+    );
+
+    expect(fetchInterpreter).toHaveBeenCalledTimes(1);
+    expect(second.coords).toEqual(first.coords);
+    expect(second.distanceM).toBe(first.distanceM);
+  });
+
   it('rejects oversized requests, empty responses, and points too far from mapped water', async () => {
     const fetchInterpreter = vi.fn(async () => ({ elements: [] }));
     await expect(routeWaterwayLeg(
