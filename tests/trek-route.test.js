@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
   MAX_COORDINATES,
+  MCP_MAX_COORDINATES,
   MAX_NOTE_CHARS,
   capCoordinates,
   capNote,
   durationViaPoint,
   formatDuration,
   formatKm,
+  sampleCoordinates,
 } from '../server/waterway/trek-route.js';
 
 describe('TREK 4.2 route result shaping', () => {
@@ -37,5 +39,13 @@ describe('TREK 4.2 route result shaping', () => {
     expect(capped).toHaveLength(MAX_COORDINATES);
     expect(capped[0]).toEqual(coords[0]);
     expect(capped.at(-1)).toEqual(coords.at(-1));
+  });
+
+  it('preserves route endpoints while bounding geometry for MCP results', () => {
+    const coords = Array.from({ length: MCP_MAX_COORDINATES + 50 }, (_, i) => [1, i / 1000]);
+    const sampled = sampleCoordinates(coords);
+    expect(sampled).toHaveLength(MCP_MAX_COORDINATES);
+    expect(sampled[0]).toEqual(coords[0]);
+    expect(sampled.at(-1)).toEqual(coords.at(-1));
   });
 });

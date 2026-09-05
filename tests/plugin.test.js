@@ -30,16 +30,18 @@ const routeReq = routeRequest({
 });
 
 describe('trek-plugin-waterway manifest', () => {
-  it('validates against SDK rules including routeProfiles', () => {
+  it('validates against SDK rules including route and MCP capabilities', () => {
     const result = validateManifest(manifest);
     expect(result.ok).toBe(true);
     expect(result.errors).toEqual([]);
-    expect(manifest.trek).toBe('>=4.0.0 <5.0.0');
+    expect(manifest.trek).toBe('>=4.2.0 <5.0.0');
+    expect(manifest.permissions).toContain('mcp:tools');
     expect(manifest.capabilities.routeProfiles).toEqual([
       { id: 'canoe', label: 'Canoe', icon: 'Waves' },
       { id: 'kayak', label: 'Kayak', icon: 'Sailboat' },
       { id: 'rowing', label: 'Rowing', icon: 'Ship' },
     ]);
+    expect(manifest.capabilities.mcpTools.map((tool) => tool.name)).toEqual(['estimate_route']);
     expect(manifest.actions).toEqual([
       {
         key: 'purgeCache',
@@ -51,7 +53,7 @@ describe('trek-plugin-waterway manifest', () => {
   });
 
   it('targets TREK 4.x hosts and does not claim compatibility with old stable or TREK 5', () => {
-    expect(manifest.trek).toMatch(/^>=4\.0\.0\s+<5\.0\.0$/);
+    expect(manifest.trek).toMatch(/^>=4\.2\.0\s+<5\.0\.0$/);
     expect(manifest.trek).not.toContain('3.');
     expect(manifest.trek).not.toContain('>=5');
   });
@@ -166,9 +168,24 @@ describe('routeProvider hook', () => {
     expect(result.viaPoints.find((point) => point.dwellSeconds != null)).toMatchObject({
       lat: 52.0,
       lng: 13.05,
-      label: 'Fixture Lock West',
+      label: 'Fixture Lock West · 12–40 min (plan 12)',
       tone: 'warn',
       dwellSeconds: 12 * 60,
+    });
+  });
+
+  it('uses the planning lock scenario for the TREK map duration', async () => {
+    fetchMock = mockOverpass(MOCK_ELEMENTS, LOCK_ELEMENTS);
+    globalThis.fetch = fetchMock;
+    const { ctx } = createHostWithDb({ config: { canoeSpeedKmh: 6 } });
+    await plugin.onLoad(ctx);
+
+    const result = await plugin.hooks.routeProvider.getRoute(routeReq);
+    const baseDuration = result.distance / ((6 * 1000) / 3600);
+    expect(result.duration).toBeCloseTo(baseDuration + 25 * 60, 1);
+    expect(result.viaPoints.find((point) => point.dwellSeconds != null)).toMatchObject({
+      label: 'Fixture Lock West · 15–40 min (plan 25)',
+      dwellSeconds: 25 * 60,
     });
   });
 
@@ -186,8 +203,8 @@ describe('routeProvider hook', () => {
     const lockVias = result.viaPoints.filter((point) => point.dwellSeconds != null);
     expect(lockVias).toHaveLength(2);
     expect(lockVias.map((point) => point.label)).toEqual([
-      'Fixture Lock West',
-      'Fixture Lock East',
+      'Fixture Lock West · 10–40 min (plan 10)',
+      'Fixture Lock East · 10–40 min (plan 10)',
     ]);
     expect(lockVias.map((point) => point.dwellSeconds)).toEqual([600, 600]);
   });
@@ -279,7 +296,7 @@ describe('routeProvider hook', () => {
     await plugin.onLoad(ctx);
 
     await expect(plugin.hooks.routeProvider.getRoute({ ...routeReq, waypoints: [routeReq.waypoints[0]] }))
-      .rejects.toThrow('waterway_requires_two_waypoints');
+      .rejects.toThrow('waterway_requires_2_to_30_waypoints');
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

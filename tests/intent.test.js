@@ -17,6 +17,7 @@ describe('original rowing-planner intent: first TREK plugin slice', () => {
 
     expect(manifest.id).toBe('waterway');
     expect(manifest.permissions).toContain('hook:route-provider');
+    expect(manifest.permissions).toContain('mcp:tools');
     expect(manifest.capabilities.routeProfiles).toEqual([
       { id: 'canoe', label: 'Canoe', icon: 'Waves' },
       { id: 'kayak', label: 'Kayak', icon: 'Sailboat' },
@@ -27,10 +28,13 @@ describe('original rowing-planner intent: first TREK plugin slice', () => {
       'canoeSpeedKmh',
       'kayakSpeedKmh',
       'rowingSpeedKmh',
+      'optimisticLockDelayMinutes',
       'defaultLockDelayMinutes',
+      'conservativeLockDelayMinutes',
     ]);
 
     expect(server).toContain('getRoute(req, hookCtx)');
+    expect(server).toContain("tools: ['estimate_route']");
     expect(server).toContain('durationViaPoint');
     expect(server).toContain('extractLocksFromOsmElements');
     expect(server).toContain('defaultLockDelayMinutes');

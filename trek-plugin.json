@@ -9,10 +9,11 @@
   "license": "MIT",
   "icon": "Waves",
   "type": "integration",
-  "trek": ">=4.0.0 <5.0.0",
+  "trek": ">=4.2.0 <5.0.0",
   "nativeModules": false,
   "permissions": [
     "hook:route-provider",
+    "mcp:tools",
     "db:own",
     "http:outbound:overpass-api.de"
   ],
@@ -53,13 +54,31 @@
       "hint": "Used for rowing duration estimates."
     },
     {
-      "key": "defaultLockDelayMinutes",
-      "label": "Default lock delay (minutes)",
+      "key": "optimisticLockDelayMinutes",
+      "label": "Optimistic lock time (minutes)",
       "input_type": "number",
       "scope": "instance",
       "placeholder": "15",
       "default": 15,
-      "hint": "Added to route duration for each detected lock."
+      "hint": "Best case per lock when entry is immediate."
+    },
+    {
+      "key": "defaultLockDelayMinutes",
+      "label": "Planning lock time (minutes)",
+      "input_type": "number",
+      "scope": "instance",
+      "placeholder": "25",
+      "default": 25,
+      "hint": "Expected time per lock used for the route shown on the map."
+    },
+    {
+      "key": "conservativeLockDelayMinutes",
+      "label": "Conservative lock time (minutes)",
+      "input_type": "number",
+      "scope": "instance",
+      "placeholder": "40",
+      "default": 40,
+      "hint": "Contingency case per lock for daylight and deadline checks."
     }
   ],
   "actions": [
@@ -89,6 +108,91 @@
         "id": "rowing",
         "label": "Rowing",
         "icon": "Ship"
+      }
+    ],
+    "mcpTools": [
+      {
+        "name": "estimate_route",
+        "title": "Estimate waterway route",
+        "description": "Estimate a canoe, kayak, or rowing route through supplied waypoints. Returns optimistic, planning, and conservative lock-time scenarios, per-leg distance and duration, operational warnings, and optional simplified geometry.",
+        "inputSchema": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "profile": {
+              "type": "string",
+              "enum": ["canoe", "kayak", "rowing"],
+              "description": "Watercraft profile used for access rules and speed estimates."
+            },
+            "waypoints": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 30,
+              "description": "Ordered start, intermediate, and destination coordinates.",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 120,
+                    "description": "Optional human-readable stop name."
+                  },
+                  "lat": {
+                    "type": "number",
+                    "minimum": -90,
+                    "maximum": 90
+                  },
+                  "lng": {
+                    "type": "number",
+                    "minimum": -180,
+                    "maximum": 180
+                  }
+                },
+                "required": ["lat", "lng"]
+              }
+            },
+            "includeGeometry": {
+              "type": "boolean",
+              "default": false,
+              "description": "Include map geometry simplified to at most 200 coordinates."
+            },
+            "lockScenario": {
+              "type": "string",
+              "enum": ["optimistic", "planning", "conservative"],
+              "default": "planning",
+              "description": "Scenario used for the primary estimate; all three scenario totals are returned."
+            },
+            "lockMinutes": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Optional per-request lock-time overrides; these do not change instance settings.",
+              "properties": {
+                "optimistic": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1440
+                },
+                "planning": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1440
+                },
+                "conservative": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1440
+                }
+              }
+            }
+          },
+          "required": ["profile", "waypoints"]
+        },
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": true,
+          "openWorldHint": true
+        }
       }
     ]
   }

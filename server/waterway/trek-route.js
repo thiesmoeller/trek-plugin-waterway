@@ -5,9 +5,12 @@ const MAX_COORDINATES = 10_000;
 const MAX_VIAS = 40;
 const MAX_NOTE_CHARS = 120;
 const MAX_LABEL_CHARS = 80;
+const MCP_MAX_COORDINATES = 200;
 
 /** Host invoke timeout is 20 s; leave a little headroom for JSON/RPC. */
 const ROUTE_BUDGET_MS = 18_000;
+/** Plugin MCP tools time out after 15 s; leave headroom for result serialisation. */
+const MCP_ROUTE_BUDGET_MS = 13_000;
 const OVERPASS_TIMEOUT_S = 12;
 
 function formatDuration(seconds) {
@@ -45,9 +48,16 @@ function waterwayMidpoint(coords) {
  */
 function capCoordinates(coords) {
   if (!Array.isArray(coords) || coords.length <= MAX_COORDINATES) return coords || [];
+  return sampleCoordinates(coords, MAX_COORDINATES);
+}
+
+/** Preserve endpoints while evenly sampling geometry for a bounded consumer. */
+function sampleCoordinates(coords, maximum = MCP_MAX_COORDINATES) {
+  if (!Array.isArray(coords) || coords.length <= maximum) return coords || [];
+  if (maximum < 2) return coords.slice(0, Math.max(0, maximum));
   const lastIndex = coords.length - 1;
   const out = [];
-  const inner = MAX_COORDINATES - 2;
+  const inner = maximum - 2;
   out.push(coords[0]);
   for (let i = 0; i < inner; i++) {
     const src = 1 + Math.round((i * (lastIndex - 2)) / Math.max(inner - 1, 1));
@@ -69,13 +79,22 @@ function durationViaPoint(coords, durationS, distanceM) {
   };
 }
 
-function lockViaPoint(lock) {
+function formatLockMinutes(value) {
+  const minutes = Math.max(0, Number(value) || 0);
+  return Number.isInteger(minutes) ? String(minutes) : minutes.toFixed(1);
+}
+
+function lockViaPoint(lock, lockMinutes) {
+  const timing = lockMinutes
+    ? ` · ${formatLockMinutes(lockMinutes.optimistic)}–${formatLockMinutes(lockMinutes.conservative)} min (plan ${formatLockMinutes(lockMinutes.planning)})`
+    : '';
+  const name = capText(lock.name || lock.ref || 'Lock', Math.max(1, MAX_LABEL_CHARS - timing.length));
   return {
     lat: lock.lat,
     lng: lock.lng,
-    label: capText(lock.name || lock.ref || 'Lock', MAX_LABEL_CHARS),
+    label: `${name}${timing}`,
     tone: 'warn',
-    dwellSeconds: lock.delayS,
+    dwellSeconds: lockMinutes ? lockMinutes.planning * 60 : lock.delayS,
   };
 }
 
@@ -89,7 +108,9 @@ module.exports = {
   MAX_VIAS,
   MAX_NOTE_CHARS,
   MAX_LABEL_CHARS,
+  MCP_MAX_COORDINATES,
   ROUTE_BUDGET_MS,
+  MCP_ROUTE_BUDGET_MS,
   OVERPASS_TIMEOUT_S,
   formatDuration,
   formatKm,
@@ -97,6 +118,7 @@ module.exports = {
   capNote,
   waterwayMidpoint,
   capCoordinates,
+  sampleCoordinates,
   durationViaPoint,
   lockViaPoint,
   pushVia,
