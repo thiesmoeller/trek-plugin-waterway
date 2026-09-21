@@ -7,8 +7,11 @@ Integration plugin for TREK 4.x that registers **canoe**, **kayak**, and **rowin
 On the TREK planner this is the native day route: waterway geometry is the map line, per-leg times show on the sidebar connectors, lock dots sit on the line with dwell-time tooltips, and each leg also gets a midpoint via labelled with paddle/row time and distance so those times are available on the map itself.
 
 AI agents connected through TREK MCP can call
-`plugin_waterway_estimate_route` to evaluate the same route engine directly.
-The tool returns bounded, structured estimates rather than requiring an agent
+`plugin_waterway_estimate_route` to evaluate the same route engine,
+`plugin_waterway_plan_trip` to split a long waterway into days the way TREK 4.3
+Road trip caps a driving day, and `plugin_waterway_search_corridor` to pick
+locks, landings, and waterside camps along that line.
+The tools return bounded, structured estimates rather than requiring an agent
 to scrape the planner UI.
 
 ## What it does
@@ -23,10 +26,10 @@ to scrape the planner UI.
   timing scenarios
 - Caches Overpass responses in the plugin's own SQLite database (`db:own`)
 - Returns the TREK 4.2 route shape: coordinates, distance in metres, duration in seconds, per-leg totals, routing notes (≤120 chars), and via points (duration markers + locks, ≤40)
-- Publishes an MCP route-estimation tool with per-leg metrics, lock delays,
-  warnings, and optional geometry simplified to at most 200 coordinates
+- Publishes MCP tools for a single-leg estimate, a whole-trip day split with a km/time cap, and a corridor search for locks, landings, campsites, and named weirs
+- On TREK 4.3, canoe/kayak/rowing days feed the Road trip planner, Show whole trip, and PDF overview because those surfaces call the same `routeProvider` profiles
 
-This provider is a route-estimation aid, not an authoritative navigation product. It deliberately does not yet do tidal context, current modelling, official notices, water levels, portage instructions, or multi-section trip-template creation.
+This provider is a route-estimation aid, not an authoritative navigation product. It deliberately does not yet do tidal context, current modelling, official notices, water levels, portage instructions, or automatic TREK trip creation. `plan_trip` proposes overnight splits; saving them still uses TREK's day/place tools.
 
 ## Screenshots
 
@@ -60,7 +63,8 @@ Set optional instance config in Admin -> Plugins -> Waterway. Manifest `default`
   "rowingSpeedKmh": 8,
   "optimisticLockDelayMinutes": 15,
   "defaultLockDelayMinutes": 25,
-  "conservativeLockDelayMinutes": 40
+  "conservativeLockDelayMinutes": 40,
+  "maxDayKm": 25
 }
 ```
 
@@ -89,16 +93,24 @@ closure, booking requirement, or restricted opening window can exceed even
 the conservative estimate and is reported separately rather than hidden in
 the average.
 
+`maxDayKm` (default 25) is the waterway counterpart of TREK 4.3 Road trip's
+daily driving limit. `plan_trip` uses it when the caller does not pass a
+per-request cap.
+
 Admins can clear the Overpass cache with **Purge Overpass cache** on the plugin's instance settings dialog.
 
 For AI planning, reconnect the MCP client after activating or updating the
-plugin, and grant its TREK OAuth token the `plugins:use` scope. The tool accepts
-two to thirty ordered waypoints and one of the declared watercraft profiles.
-It does not modify the trip: use TREK's existing MCP day/place tools to save
-the selected stops and set `plugin:waterway/<profile>` as the day or leg mode.
-It returns all three lock scenarios on every call. `lockScenario` selects the
-primary estimate, while optional `lockMinutes` values override the three
-per-lock assumptions for that call only and never change instance settings.
+plugin, and grant its TREK OAuth token the `plugins:use` scope. The estimate
+and plan tools accept two to thirty ordered waypoints and one of the declared
+watercraft profiles. They do not modify the trip: use TREK's existing MCP
+day/place tools to save the selected stops and set `plugin:waterway/<profile>`
+as the day or leg mode. `plan_trip` then becomes the input to TREK 4.3 Road
+trip and Show whole trip, which already dispatch those plugin profiles.
+`search_corridor` answers the same rest-area / campsite / sights kinds Road
+trip uses along a driven road, mapped onto locks, landings, camps, and named
+weirs. `lockScenario` selects the primary estimate, while optional
+`lockMinutes` values override the three per-lock assumptions for that call
+only and never change instance settings.
 
 ## Local development
 
@@ -117,6 +129,37 @@ npm run dev
 
 `npm run dev` starts the SDK dev server with a real plugin database and injected `trek-plugin-sdk`. The plugin does not require a running TREK instance for unit tests — use `createMockHost` from `trek-plugin-sdk/testing` (see `tests/`).
 
+## TREK 4.3
+
+TREK 4.3's Road trip addon is the closest core match for this plugin: it plans a
+whole itinerary as one continuous route, caps a day, searches along the line
+for places to stop, and exposes that headless over MCP. Our canoe, kayak, and
+rowing profiles already participate — `calculate_roadtrip` and the browser
+router dispatch `plugin:waterway/<profile>` with the same `getRoute` contract
+as the day planner. Lock via points (`dwellSeconds`) and waterway geometry
+therefore show on Road trip, Show whole trip (colour per day, routed rather
+than straight-line totals), car-booking stop geometry, and the new whole-trip
+PDF map without a second integration.
+
+What 4.3 adds that this plugin now mirrors:
+
+| 4.3 core | Waterway plugin |
+|---|---|
+| Daily driving / time caps, overflow onto extra days | `plan_trip` + instance `maxDayKm`, preferring mapped landings |
+| Corridor search for fuel, rest areas, camps, sights | `search_corridor`: locks/landings as `rest_area`, camps as `campsite`, named locks/weirs as `sights` |
+| Headless `calculate_roadtrip` / `search_roadtrip_corridor` | `plugin_waterway_plan_trip` / `plugin_waterway_search_corridor` |
+| Via points on the route | Existing lock and duration vias, now consumed by Road trip |
+
+Deliberately not claimed yet:
+
+- `searchProvider` for the Road trip UI itself. TREK 4.3 calls that hook with
+  `category` + `bounds`, but `trek-plugin-sdk` 1.7.0 does not yet list
+  `hook:search-provider`, so declaring it would fail `validate`. The MCP
+  corridor tool is the same search, usable today.
+- A trip-page Waterway tab, GPX-follow days, and `dayScheduleProvider` lock
+  rows. Road trip already folds plugin `dwellSeconds` into the schedule, and
+  a trip-page would need a client bundle this integration does not ship.
+
 ## Routing scope
 
 The profiles share the same route-provider contract but apply different suitability rules:
@@ -133,17 +176,17 @@ Mosel. It targets roughly 25 km/day, visits eleven rowing facilities, and uses
 public landings where club spacing makes 25–30 km club-to-club stages
 impossible. The earlier
 [Mettlach planning sketch](docs/examples/mettlach-koblenz.md) remains as a
-shorter human-readable example. The plugin validates and estimates the day
-routes; it does not yet create the TREK trip automatically.
+shorter human-readable example. `plan_trip` can propose overnight splits for
+the same kind of itinerary; saving the days into TREK is still a separate step.
 
 ## Project layout
 
 ```
-trek-plugin.json          Manifest (id: waterway, routeProfiles capability)
-server/index.js           Plugin entry — onLoad, instance action, hooks.routeProvider
+trek-plugin.json          Manifest (id: waterway, routeProfiles + MCP tools)
+server/index.js           Plugin entry — onLoad, instance action, route + MCP hooks
 server/overpass.js        Overpass client with db-backed cache
-server/waterway/          Graph/snap/pathfind engine (pure JS)
-tests/fixtures/           Deterministic OSM-like route and lock fixtures
+server/waterway/          Graph, day-split planner, corridor search (pure JS)
+tests/fixtures/           Deterministic OSM-like route, lock, and place fixtures
 tests/                    Vitest suite with mocked fetch
 docs/examples/            Human-readable trip planning examples
 ```
@@ -158,6 +201,8 @@ Required tests run standalone without TREK core and without live Overpass:
 - `tests/trek-host-contract.test.js` — TREK-style discovery/enabling/invocation against deterministic OSM fixtures
 - `tests/trek-route.test.js` — duration labels and TREK vertex/note budgets
 - `tests/mcp-tool.test.js` — direct agent route estimates, lock summaries, bounded geometry, and errors
+- `tests/plan-trip.test.js` — TREK 4.3-style day caps, landing-preferred overnights, and `plan_trip` MCP output
+- `tests/search-corridor.test.js` — Road trip corridor kinds mapped onto locks, landings, camps, and weirs
 - `tests/merzig-koblenz-trip.test.js` — ten connected rowing days from Merzig to Koblenz, club visits, stage chainage, and map/time output
 - `tests/live-merzig-koblenz.test.js` — optional end-to-end routing of those ten days against current Overpass/OSM data
 - `tests/sdk-cli.test.js` — SDK validator CLI exit contract
@@ -207,7 +252,7 @@ registration:
 ```bash
 npx trek-plugin-sdk preflight \
   --repo thiesmoeller/trek-plugin-waterway \
-  --tag v1.1.0
+  --tag v1.2.0
 ```
 
 After preflight passes, `trek-plugin-sdk submit` performs the separate

@@ -29,7 +29,7 @@ describe('waterway MCP route tool', () => {
   });
 
   it('publishes the declared estimate tool and returns agent-friendly route details', async () => {
-    expect(plugin.hooks.mcpToolProvider.tools).toEqual(['estimate_route']);
+    expect(plugin.hooks.mcpToolProvider.tools).toEqual(['estimate_route', 'plan_trip', 'search_corridor']);
 
     const result = await plugin.hooks.mcpToolProvider.callTool({
       name: 'estimate_route',

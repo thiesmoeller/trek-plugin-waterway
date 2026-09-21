@@ -45,6 +45,12 @@ installation, and updates without submitting anything upstream.
 - Compare map and MCP planning durations for zero, one, and several locks.
 - Check optimistic, planning, and conservative totals and per-call MCP
   overrides.
+- Call `plugin_waterway_plan_trip` on a route longer than `maxDayKm` and confirm
+  it prefers a mapped landing and does not write days into the trip.
+- Call `plugin_waterway_search_corridor` with `rest_area`, `campsite`, and
+  `sights` around a routed day and confirm fuel/charging kinds stay empty.
+- On TREK 4.3 with Road trip enabled, set a day to Rowing/Canoe/Kayak and
+  confirm Show whole trip and `calculate_roadtrip` draw the waterway geometry.
 - Confirm mapped opening hours are warnings, not treated as a guarantee.
 - Exercise canoe, kayak, and rowing access rules on the Merzig–Koblenz plan.
 - Reconnect an MCP client with `plugins:use`, call

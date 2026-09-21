@@ -20,6 +20,7 @@ export const berlinCanalRouteElements = [
   { type: 'way', id: 12, nodes: [1, 5], tags: { waterway: 'stream', name: 'Ignored Stream Shortcut' } },
   { type: 'node', id: 20, lat: 52.0, lon: 13.0, tags: { waterway: 'access_point', canoe: 'yes', name: 'Fixture Put-in' } },
   { type: 'node', id: 21, lat: 52.0, lon: 13.2, tags: { leisure: 'slipway', canoe: 'yes', name: 'Fixture Take-out' } },
+  { type: 'node', id: 22, lat: 52.0, lon: 13.1, tags: { waterway: 'access_point', canoe: 'yes', name: 'Fixture Mid Landing' } },
 ];
 
 export const berlinCanalLockElements = [
@@ -45,6 +46,41 @@ export const berlinCanalLockElements = [
       lock_name: 'Fixture Lock East',
       ref: 'E-1',
     },
+  },
+];
+
+export const berlinCanalPlaceElements = [
+  ...berlinCanalLockElements,
+  { type: 'node', id: 20, lat: 52.0, lon: 13.0, tags: { waterway: 'access_point', canoe: 'yes', name: 'Fixture Put-in' } },
+  { type: 'node', id: 21, lat: 52.0, lon: 13.2, tags: { leisure: 'slipway', canoe: 'yes', name: 'Fixture Take-out' } },
+  { type: 'node', id: 22, lat: 52.0, lon: 13.1, tags: { waterway: 'access_point', canoe: 'yes', name: 'Fixture Mid Landing' } },
+  {
+    type: 'node',
+    id: 30,
+    lat: 52.0,
+    lon: 13.08,
+    tags: { tourism: 'camp_site', name: 'Fixture Canal Camp', website: 'https://example.test/camp' },
+  },
+  {
+    type: 'node',
+    id: 31,
+    lat: 52.0,
+    lon: 13.12,
+    tags: { sport: 'rowing', name: 'Fixture Rowing Club', phone: '+49 30 999' },
+  },
+  {
+    type: 'node',
+    id: 32,
+    lat: 52.0,
+    lon: 13.18,
+    tags: { waterway: 'weir', name: 'Fixture Named Weir' },
+  },
+  {
+    type: 'node',
+    id: 33,
+    lat: 52.0,
+    lon: 13.16,
+    tags: { tourism: 'camp_site', name: 'Unsafe Camp', website: 'javascript:alert(1)' },
   },
 ];
 

@@ -8,6 +8,8 @@ describe('waterway public module', () => {
       extractLocksFromOsmElements: expect.any(Function),
       routeWaterwayLeg: expect.any(Function),
       capCoordinates: expect.any(Function),
+      planWaterwayDays: expect.any(Function),
+      searchWaterwayPlaces: expect.any(Function),
     });
   });
 });

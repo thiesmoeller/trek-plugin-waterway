@@ -41,7 +41,11 @@ describe('trek-plugin-waterway manifest', () => {
       { id: 'kayak', label: 'Kayak', icon: 'Sailboat' },
       { id: 'rowing', label: 'Rowing', icon: 'Ship' },
     ]);
-    expect(manifest.capabilities.mcpTools.map((tool) => tool.name)).toEqual(['estimate_route']);
+    expect(manifest.capabilities.mcpTools.map((tool) => tool.name)).toEqual([
+      'estimate_route',
+      'plan_trip',
+      'search_corridor',
+    ]);
     expect(manifest.actions).toEqual([
       {
         key: 'purgeCache',

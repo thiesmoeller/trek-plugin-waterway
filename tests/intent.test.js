@@ -31,10 +31,13 @@ describe('original rowing-planner intent: first TREK plugin slice', () => {
       'optimisticLockDelayMinutes',
       'defaultLockDelayMinutes',
       'conservativeLockDelayMinutes',
+      'maxDayKm',
     ]);
 
     expect(server).toContain('getRoute(req, hookCtx)');
-    expect(server).toContain("tools: ['estimate_route']");
+    expect(server).toContain("tools: ['estimate_route', 'plan_trip', 'search_corridor']");
+    expect(server).toContain('planWaterwayDays');
+    expect(server).toContain('searchWaterwayPlaces');
     expect(server).toContain('durationViaPoint');
     expect(server).toContain('extractLocksFromOsmElements');
     expect(server).toContain('defaultLockDelayMinutes');
