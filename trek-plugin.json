@@ -1,7 +1,7 @@
 {
   "id": "waterway",
   "name": "Waterway Route Provider",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "apiVersion": 1,
   "author": "Thies Möller",
   "description": "Route day plans along OSM rivers, canals, and fairways via Overpass with rough paddle and rowing duration estimates.",
@@ -81,6 +81,15 @@
       "placeholder": "40",
       "default": 40,
       "hint": "Contingency case per lock for daylight and deadline checks."
+    },
+    {
+      "key": "maxDayKm",
+      "label": "Typical day distance (km)",
+      "input_type": "number",
+      "scope": "instance",
+      "placeholder": "25",
+      "default": 25,
+      "hint": "Used by the plan_trip MCP tool to split a waterway into days, the same role daily driving limits play in TREK 4.3 Road trip."
     }
   ],
   "actions": [
@@ -191,6 +200,155 @@
             }
           },
           "required": ["profile", "waypoints"]
+        },
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": true,
+          "openWorldHint": true
+        }
+      },
+      {
+        "name": "plan_trip",
+        "title": "Plan waterway days",
+        "description": "Route a canoe, kayak, or rowing itinerary and split it into days using a distance cap (and optional day-time cap), preferring mapped landings. Mirrors TREK 4.3 Road trip daily limits for waterways. Returns suggested overnight stops, per-day lock counts, and three lock-time scenarios. Does not create or modify the TREK trip.",
+        "inputSchema": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "profile": {
+              "type": "string",
+              "enum": ["canoe", "kayak", "rowing"],
+              "description": "Watercraft profile used for access rules and speed estimates."
+            },
+            "waypoints": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 30,
+              "description": "Ordered start, intermediate, and destination coordinates.",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 120,
+                    "description": "Optional human-readable stop name."
+                  },
+                  "lat": {
+                    "type": "number",
+                    "minimum": -90,
+                    "maximum": 90
+                  },
+                  "lng": {
+                    "type": "number",
+                    "minimum": -180,
+                    "maximum": 180
+                  }
+                },
+                "required": ["lat", "lng"]
+              }
+            },
+            "maxDayKm": {
+              "type": "number",
+              "minimum": 5,
+              "maximum": 80,
+              "description": "Longest paddling day in kilometres before a new overnight is suggested. Defaults to the instance maxDayKm setting (25)."
+            },
+            "maxDayMinutes": {
+              "type": "number",
+              "minimum": 30,
+              "maximum": 1440,
+              "description": "Optional cap on paddle time plus planning lock delays for one day."
+            },
+            "includeGeometry": {
+              "type": "boolean",
+              "default": false,
+              "description": "Include map geometry simplified to at most 200 coordinates."
+            },
+            "lockScenario": {
+              "type": "string",
+              "enum": ["optimistic", "planning", "conservative"],
+              "default": "planning",
+              "description": "Lock-time scenario used when applying maxDayMinutes and the primary day totals."
+            },
+            "lockMinutes": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Optional per-request lock-time overrides; these do not change instance settings.",
+              "properties": {
+                "optimistic": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1440
+                },
+                "planning": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1440
+                },
+                "conservative": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1440
+                }
+              }
+            }
+          },
+          "required": ["profile", "waypoints"]
+        },
+        "annotations": {
+          "destructiveHint": false,
+          "idempotentHint": true,
+          "openWorldHint": true
+        }
+      },
+      {
+        "name": "search_corridor",
+        "title": "Search waterway corridor",
+        "description": "Find mapped locks, landings, campsites, and waterway landmarks in a bounding box or around a point. Use after plan_trip to pick overnight stops. rest_area returns locks and put-ins, campsite returns waterside camps, sights returns named locks and weirs. Fuel, charging, hotel, and restaurant return nothing. Does not add stops to the trip.",
+        "inputSchema": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "category": {
+              "type": "string",
+              "enum": ["rest_area", "campsite", "sights"],
+              "description": "TREK 4.3 Road trip corridor kind to answer. Omit to return every supported waterway place."
+            },
+            "query": {
+              "type": "string",
+              "maxLength": 200,
+              "description": "Optional name filter. Ignored when it is the host's fixed category phrase such as rest area."
+            },
+            "bounds": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Search rectangle. Prefer this when you already have a routed day's extent.",
+              "properties": {
+                "south": { "type": "number", "minimum": -90, "maximum": 90 },
+                "west": { "type": "number", "minimum": -180, "maximum": 180 },
+                "north": { "type": "number", "minimum": -90, "maximum": 90 },
+                "east": { "type": "number", "minimum": -180, "maximum": 180 }
+              },
+              "required": ["south", "west", "north", "east"]
+            },
+            "near": {
+              "type": "object",
+              "additionalProperties": false,
+              "description": "Centre point used when bounds are omitted; searches about 12 km around it.",
+              "properties": {
+                "lat": { "type": "number", "minimum": -90, "maximum": 90 },
+                "lng": { "type": "number", "minimum": -180, "maximum": 180 }
+              },
+              "required": ["lat", "lng"]
+            },
+            "limit": {
+              "type": "number",
+              "minimum": 1,
+              "maximum": 20,
+              "default": 10
+            }
+          }
         },
         "annotations": {
           "destructiveHint": false,

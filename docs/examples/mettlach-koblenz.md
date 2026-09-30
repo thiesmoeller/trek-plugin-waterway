@@ -1,6 +1,6 @@
 # Mettlach to Koblenz Rowing Trip Sketch
 
-This is a planning example based on the DRV Gewaesserkatalog, not an automatically importable TREK trip. The current plugin surface is `hook:route-provider`, so it can validate and estimate route legs between waypoints, but it cannot create day plans or import predefined tours by itself.
+This is a planning example based on the DRV Gewaesserkatalog, not an automatically importable TREK trip. The plugin can estimate legs through `hook:route-provider` and propose overnight splits through `plugin_waterway_plan_trip`. It still does not create the TREK trip or import a predefined tour by itself.
 
 Sources:
 

@@ -4,6 +4,8 @@ const { definePlugin } = require('trek-plugin-sdk');
 const { routeWaterwayLeg } = require('./waterway/routing');
 const { extractLocksFromOsmElements } = require('./waterway/context');
 const { createOverpassClient, OVERPASS_CACHE_MIGRATION } = require('./overpass');
+const { planWaterwayDays, boundedDayKm, DEFAULT_MAX_DAY_KM } = require('./waterway/plan');
+const { searchWaterwayPlaces } = require('./waterway/search');
 const {
   ROUTE_BUDGET_MS,
   MCP_ROUTE_BUDGET_MS,
@@ -146,6 +148,7 @@ async function calculateRoute(req, runtime, budgetMs) {
         paddlingDuration,
         scenarioDurations,
         locks,
+        elements: routed.elements || [],
       });
       pushVia(viaPoints, durationViaPoint(coords, legDuration, distanceM));
       for (const lock of locks) pushVia(viaPoints, lockViaPoint(lock, lockMinutes));
@@ -258,6 +261,62 @@ function mcpRouteResult(route, includeGeometry, requestedScenario) {
   return result;
 }
 
+function mcpPlanResult(route, plan, includeGeometry, requestedScenario) {
+  const selectedScenario = LOCK_SCENARIOS.includes(requestedScenario) ? requestedScenario : 'planning';
+  const scenarios = Object.fromEntries(
+    LOCK_SCENARIOS.map((scenario) => [scenario, routeScenario(route, scenario)]),
+  );
+  const result = {
+    profile: route.profile,
+    lockModel: {
+      selectedScenario,
+      perLockMinutes: { ...route.lockMinutes },
+      explanation: 'Optimistic assumes immediate entry; planning is used on the TREK map; conservative is for contingency checks.',
+    },
+    complete: plan.complete,
+    settings: {
+      maxDayKm: plan.maxDayKm,
+      maxDayMinutes: plan.maxDayMinutes,
+    },
+    estimate: {
+      scenario: selectedScenario,
+      distanceMeters: plan.totalDistanceMetres,
+      distanceKm: rounded(plan.totalDistanceMetres / 1000, 2),
+      durationSeconds: plan.totalDurationSeconds,
+      durationMinutes: rounded(plan.totalDurationSeconds / 60, 1),
+      dayCount: plan.days.length,
+      ...scenarios[selectedScenario],
+    },
+    scenarios,
+    days: plan.days.map((day) => ({
+      dayNumber: day.dayNumber,
+      from: day.from,
+      to: day.to,
+      distanceMeters: day.distanceMetres,
+      distanceKm: rounded(day.distanceMetres / 1000, 2),
+      durationSeconds: day.durationSeconds,
+      durationMinutes: rounded(day.durationSeconds / 60, 1),
+      lockCount: day.lockCount,
+      locks: day.locks,
+    })),
+    warnings: [
+      ...plan.warnings,
+      'Lock opening hours, closures, queues, booking rules, and traffic can exceed the conservative estimate.',
+    ],
+    howToSave: 'This tool does not modify the trip. Create days and places with TREK MCP, then set plugin:waterway/<profile> as the day or leg mode so the 4.3 Road trip planner and whole-trip map use this route.',
+    caveat: 'Planning estimate only; verify access, conditions, notices, water levels, and landing rights.',
+  };
+  if (includeGeometry) {
+    const geometry = sampleCoordinates(route.coordinates, MCP_MAX_COORDINATES);
+    result.geometry = {
+      coordinates: geometry,
+      originalCoordinateCount: route.coordinates.length,
+      simplified: geometry.length < route.coordinates.length,
+    };
+  }
+  return result;
+}
+
 module.exports = definePlugin({
   async onLoad(pluginCtx) {
     ctx = pluginCtx;
@@ -296,18 +355,39 @@ module.exports = definePlugin({
       },
     },
     mcpToolProvider: {
-      tools: ['estimate_route'],
+      tools: ['estimate_route', 'plan_trip', 'search_corridor'],
       async callTool({ name, args }, hookCtx) {
-        if (name !== 'estimate_route') throw new Error('unsupported_mcp_tool');
         const runtime = runtimeCtx(hookCtx);
         if (!runtime) throw new Error('plugin_not_loaded');
         const input = args && typeof args === 'object' ? args : {};
-        const route = await calculateRoute({
-          profile: input.profile,
-          waypoints: input.waypoints,
-          lockMinutes: input.lockMinutes,
-        }, runtime, MCP_ROUTE_BUDGET_MS);
-        return mcpRouteResult(route, input.includeGeometry === true, input.lockScenario);
+        if (name === 'estimate_route') {
+          const route = await calculateRoute({
+            profile: input.profile,
+            waypoints: input.waypoints,
+            lockMinutes: input.lockMinutes,
+          }, runtime, MCP_ROUTE_BUDGET_MS);
+          return mcpRouteResult(route, input.includeGeometry === true, input.lockScenario);
+        }
+        if (name === 'plan_trip') {
+          const route = await calculateRoute({
+            profile: input.profile,
+            waypoints: input.waypoints,
+            lockMinutes: input.lockMinutes,
+          }, runtime, MCP_ROUTE_BUDGET_MS);
+          const plan = planWaterwayDays(route, {
+            maxDayKm: boundedDayKm(input.maxDayKm, boundedDayKm(runtime.config?.maxDayKm, DEFAULT_MAX_DAY_KM)),
+            maxDayMinutes: input.maxDayMinutes,
+            speedKmh: profileSpeedKmh(route.profile, runtime.config),
+            lockMinutes: route.lockMinutes[LOCK_SCENARIOS.includes(input.lockScenario) ? input.lockScenario : 'planning'],
+          });
+          return mcpPlanResult(route, plan, input.includeGeometry === true, input.lockScenario);
+        }
+        if (name === 'search_corridor') {
+          return {
+            places: await searchWaterwayPlaces(input, runtime),
+          };
+        }
+        throw new Error('unsupported_mcp_tool');
       },
     },
   },
