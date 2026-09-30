@@ -84,8 +84,67 @@ function limitFrom(raw) {
   return Number.isFinite(asked) && asked > 0 ? Math.min(MAX_LIMIT, Math.trunc(asked)) : DEFAULT_LIMIT;
 }
 
+/** Same cap TREK 4.3.2 puts on a place website before it can be saved. */
+const PLACE_WEBSITE_MAX_LENGTH = 500;
+const HTTP_URL = /^https?:\/\//i;
+const HOST_AND_PORT = /^([^:/?#@\s]+)(?::\d{1,5})?$/;
+const LABEL = /^[\p{L}\p{N}\p{M}_-]+$/u;
+const OCTET = /^\d{1,3}$/;
+const LETTER = /\p{L}/u;
+
+function authorityOf(rest) {
+  const end = rest.search(/[/?#]/);
+  return end === -1 ? rest : rest.slice(0, end);
+}
+
+function isHostName(host) {
+  const labels = host.split('.');
+  if (labels.length < 2) return false;
+  if (labels.every((label) => OCTET.test(label))) {
+    return labels.length === 4 && labels.every((label) => Number(label) <= 255);
+  }
+  const valid = labels.every((label) => LABEL.test(label) && !label.startsWith('-') && !label.endsWith('-'));
+  return valid && LETTER.test(labels[labels.length - 1] ?? '');
+}
+
+function hasHost(authority) {
+  const host = HOST_AND_PORT.exec(authority)?.[1];
+  return host !== undefined && isHostName(host);
+}
+
+/**
+ * Match TREK's normalizePlaceWebsite: keep http(s), give a bare host or
+ * protocol-relative address https, and drop every other scheme.
+ */
+function normalizePlaceWebsite(value) {
+  if (typeof value !== 'string') return null;
+  const text = value.trim();
+  if (!text) return null;
+
+  let url;
+  if (HTTP_URL.test(text)) {
+    url = text;
+  } else if (text.startsWith('//')) {
+    if (!hasHost(authorityOf(text.slice(2)))) return null;
+    url = `https:${text}`;
+  } else {
+    if (!hasHost(authorityOf(text))) return null;
+    url = `https://${text}`;
+  }
+
+  if (url.length > PLACE_WEBSITE_MAX_LENGTH) return null;
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+    return url;
+  } catch {
+    return null;
+  }
+}
+
 function toSearchHit(place, requestedCategory) {
   const category = publicCategory(place.kind, requestedCategory);
+  const website = normalizePlaceWebsite(place.website);
   return {
     id: place.id,
     name: place.name,
@@ -93,7 +152,7 @@ function toSearchHit(place, requestedCategory) {
     lng: place.lng,
     ...(category ? { category } : {}),
     description: place.description,
-    ...(place.website && /^https?:\/\//i.test(place.website) ? { website: place.website } : {}),
+    ...(website ? { website } : {}),
     ...(place.phone ? { phone: place.phone.slice(0, 60) } : {}),
     ...(place.alongM != null ? { alongKm: Math.round((place.alongM / 1000) * 100) / 100 } : {}),
     ...(place.offRouteM != null ? { distanceKm: Math.round((place.offRouteM / 1000) * 1000) / 1000 } : {}),
@@ -137,5 +196,6 @@ module.exports = {
   MAX_LIMIT,
   searchBounds,
   waterwayPlaceQuery,
+  normalizePlaceWebsite,
   searchWaterwayPlaces,
 };

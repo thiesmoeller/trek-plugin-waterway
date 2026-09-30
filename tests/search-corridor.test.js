@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { berlinCanalPlaceElements, overpassSequence } from './fixtures/waterway-fixtures.js';
 import { createHostWithDb } from './mock-db.js';
 import { extractPlaces, matchesCategory, publicCategory } from '../server/waterway/places.js';
-import { searchWaterwayPlaces } from '../server/waterway/search.js';
+import { normalizePlaceWebsite, searchWaterwayPlaces } from '../server/waterway/search.js';
 
 const bounds = { south: 51.9, west: 12.9, north: 52.1, east: 13.3 };
 
@@ -57,6 +57,20 @@ describe('waterway place classification', () => {
     expect(publicCategory('lock', 'sights')).toBe('sights');
     expect(matchesCategory('sight', 'sights')).toBe(true);
     expect(matchesCategory('lock', 'campsite')).toBe(false);
+  });
+});
+
+describe('TREK 4.3.2 place websites', () => {
+  it('keeps http(s), completes a bare host, and drops other schemes', () => {
+    expect(normalizePlaceWebsite('https://example.test/camp')).toBe('https://example.test/camp');
+    expect(normalizePlaceWebsite('bootshaus.example/guest')).toBe('https://bootshaus.example/guest');
+    expect(normalizePlaceWebsite('//club.example/info')).toBe('https://club.example/info');
+    expect(normalizePlaceWebsite('javascript:alert(1)')).toBeNull();
+    expect(normalizePlaceWebsite('mailto:dock@example.test')).toBeNull();
+    expect(normalizePlaceWebsite('Chapelle')).toBeNull();
+    expect(normalizePlaceWebsite('   ')).toBeNull();
+    expect(normalizePlaceWebsite('example.com:8080/lock')).toBe('https://example.com:8080/lock');
+    expect(normalizePlaceWebsite(`https://example.test/${'a'.repeat(500)}`)).toBeNull();
   });
 });
 

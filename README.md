@@ -153,12 +153,32 @@ What 4.3 adds that this plugin now mirrors:
 Deliberately not claimed yet:
 
 - `searchProvider` for the Road trip UI itself. TREK 4.3 calls that hook with
-  `category` + `bounds`, but `trek-plugin-sdk` 1.7.0 does not yet list
-  `hook:search-provider`, so declaring it would fail `validate`. The MCP
-  corridor tool is the same search, usable today.
+  `category` + `bounds`, but `trek-plugin-sdk` 1.7.0 (still current on 4.3.3)
+  does not list `hook:search-provider`, so declaring it would fail `validate`.
+  The MCP corridor tool is the same search, usable today.
 - A trip-page Waterway tab, GPX-follow days, and `dayScheduleProvider` lock
   rows. Road trip already folds plugin `dwellSeconds` into the schedule, and
   a trip-page would need a client bundle this integration does not ship.
+- Writing the planned days into the trip. 4.3.2 added `ctx.days.create({ dated: true })`
+  and made `ctx.days.delete` refuse the last day, and 4.3.1 makes
+  `ctx.trips.create` pick the display currency when none is given. This plugin
+  still does not create trips or days.
+
+### Checked on 4.3.3
+
+Patches 4.3.1 through 4.3.3 do not change the route-provider contract. TREK
+still calls `getRoute({ tripId, dayId, profile, waypoints })` and still
+requires `{ coordinates, distance, duration, legs, viaPoints? }`. A flight,
+train, ferry, cruise, or bus is seated by the host and is not sent to the
+router, so a waterway profile is not asked to paddle between airports. A day
+that starts or ends at a booked stay can hand that stay in as a waypoint; a
+stay too far from mapped water still fails the snap and the planner falls
+back to a straight line.
+
+`search_corridor` follows the 4.3.2 place-website rule: a bare OSM host such
+as `bootshaus.example/guest` is returned as `https://…`, and `javascript:`
+or `mailto:` values are omitted. Plugin databases keeping SQLite temp data
+in memory is a host change and needs nothing from this plugin.
 
 ## Routing scope
 
